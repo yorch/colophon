@@ -1,0 +1,49 @@
+{
+  "name": "colophon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Markdown documentation for the Backstage software catalog — rendered for humans, exposed as MCP tools for agents.",
+  "license": "Apache-2.0",
+  "packageManager": "yarn@4.13.0",
+  "engines": {
+    "node": "22 || 24"
+  },
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "plugins/*"
+    ]
+  },
+  "scripts": {
+    "build": "backstage-cli repo build --all",
+    "clean": "backstage-cli repo clean",
+    "test": "backstage-cli repo test --watch=false",
+    "test:watch": "backstage-cli repo test",
+    "test:all": "backstage-cli repo test --coverage --watch=false",
+    "tsc": "tsc",
+    "tsc:full": "tsc --skipLibCheck false",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "lint:arch": "eslint --max-warnings 0 \"{packages,plugins}/*/src/**/*.{ts,tsx}\"",
+    "verify": "yarn lint && yarn lint:arch && yarn tsc && yarn test"
+  },
+  "devDependencies": {
+    "@backstage/cli": "^0.36.4",
+    "@backstage/cli-defaults": "^0.1.4",
+    "@backstage/eslint-plugin": "^0.3.1",
+    "@biomejs/biome": "^2.5.8",
+    "@jest/environment-jsdom-abstract": "^30.4.1",
+    "@types/jest": "^30",
+    "@types/jsdom": "^27",
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/parser": "^8.17.0",
+    "eslint": "^8.57.1",
+    "jest": "~30.2.0",
+    "jsdom": "^27.1.0",
+    "typescript": "~5.8.0"
+  },
+  "resolutions": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  }
+}

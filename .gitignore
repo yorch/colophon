@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Yarn 4 (node-modules linker) — keep releases, ignore the rest
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/versions
+.pnp.*
+.yarn/install-state.gz
+
+# Build output
+dist/
+dist-types/
+*.tsbuildinfo
+
+# Test output
+coverage/
+
+# Local scratch space (see CLAUDE.md — never use /tmp for project work)
+tmp/
+
+# Editors & OS
+.DS_Store
+.idea/
+*.swp
+
+# Local environment / secrets
+.env
+.env.local
+*.local.yaml
+app-config.local.yaml
