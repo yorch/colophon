@@ -113,6 +113,10 @@ export const manifestSchema = z.object({
   schemaVersion: z.literal(1),
   bundleId: bundleIdSchema,
   revisionId: revisionIdSchema,
+  /**
+   * Canonical UTC with a trailing Z. Keeps timestamps lexicographically
+   * sortable and free of offset ambiguity; publishers must convert.
+   */
   createdAt: z.iso.datetime(),
   source: sourceSchema,
   publisher: publisherSchema.optional(),

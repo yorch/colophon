@@ -5,6 +5,9 @@
  * Changes here are changes to the wire format between all four — treat this
  * package as the place where compatibility is decided.
  */
+
+export * from './chunks';
+export * from './config';
 export * from './ids';
 export * from './manifest';
 export * from './storage';
