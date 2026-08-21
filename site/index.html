@@ -19,17 +19,15 @@
       // flash of the other theme. Deliberately inline and blocking: a
       // deferred script would run after the first frame, which is the frame
       // that would be wrong.
-      (function () {
-        try {
-          var stored = localStorage.getItem('colophon-theme');
-          if (stored === 'light' || stored === 'dark') {
-            document.documentElement.setAttribute('data-theme', stored);
-          }
-        } catch (e) {
-          // Private browsing can throw on localStorage; the system
-          // preference is a perfectly good fallback.
+      try {
+        const stored = localStorage.getItem('colophon-theme');
+        if (stored === 'light' || stored === 'dark') {
+          document.documentElement.setAttribute('data-theme', stored);
         }
-      })();
+      } catch {
+        // Private browsing can throw on localStorage; the system preference
+        // is a perfectly good fallback.
+      }
     </script>
     <link rel="stylesheet" href="assets/style.css" />
   </head>
@@ -440,70 +438,75 @@ uploaded 0 blobs (0 B), reused 5 (8.7 kB)</code></pre>
       </div>
     </footer>
     <script>
-      (function () {
-        var root = document.documentElement;
-        var button = document.querySelector('[data-theme-toggle]');
-        if (!button) return;
+      {
+        const root = document.documentElement;
+        const button = document.querySelector('[data-theme-toggle]');
 
         // system -> light -> dark -> system. Three states rather than two so
         // a reader can hand control back to the operating system, which a
         // plain on/off switch cannot express.
-        var ORDER = ['system', 'light', 'dark'];
-        var LABEL = {
+        const ORDER = ['system', 'light', 'dark'];
+        const LABEL = {
           system: 'Theme: following system. Switch to light.',
           light: 'Theme: light. Switch to dark.',
           dark: 'Theme: dark. Follow system.',
         };
 
-        function current() {
-          return root.getAttribute('data-theme') || 'system';
-        }
+        const current = () => root.getAttribute('data-theme') || 'system';
 
-        function describe() {
-          var state = current();
-          button.setAttribute('aria-label', LABEL[state]);
-          button.setAttribute('title', LABEL[state]);
-        }
+        const describe = () => {
+          const label = LABEL[current()];
+          button.setAttribute('aria-label', label);
+          button.setAttribute('title', label);
+        };
 
-        function applyThemeColor(state) {
-          // The theme-color metas are media-query driven, which cannot see an
-          // explicit choice — so the browser chrome would keep following the
-          // system while the page did not.
-          var dark = state === 'dark' ||
-            (state === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+        // The theme-color metas are media-query driven, which cannot see an
+        // explicit choice — so the browser chrome would keep following the
+        // system while the page did not.
+        const applyThemeColor = state => {
+          const dark =
+            state === 'dark' ||
+            (state === 'system' &&
+              matchMedia('(prefers-color-scheme: dark)').matches);
+          let meta = document.querySelector(
+            'meta[name="theme-color"]:not([media])',
+          );
           if (!meta) {
             meta = document.createElement('meta');
             meta.setAttribute('name', 'theme-color');
             document.head.appendChild(meta);
           }
           meta.setAttribute('content', dark ? '#101312' : '#fbfaf7');
-        }
+        };
 
-        function apply(next) {
+        const apply = next => {
           if (next === 'system') {
             root.removeAttribute('data-theme');
           } else {
             root.setAttribute('data-theme', next);
           }
           try {
-            if (next === 'system') localStorage.removeItem('colophon-theme');
-            else localStorage.setItem('colophon-theme', next);
-          } catch (e) {
+            if (next === 'system') {
+              localStorage.removeItem('colophon-theme');
+            } else {
+              localStorage.setItem('colophon-theme', next);
+            }
+          } catch {
             // Not persisting is survivable; the toggle still works for this
             // page view.
           }
           describe();
           applyThemeColor(next);
+        };
+
+        if (button) {
+          button.addEventListener('click', () => {
+            apply(ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length]);
+          });
+          describe();
+          applyThemeColor(current());
         }
-
-        button.addEventListener('click', function () {
-          apply(ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length]);
-        });
-
-        describe();
-        applyThemeColor(current());
-      })();
+      }
     </script>
   </body>
 </html>

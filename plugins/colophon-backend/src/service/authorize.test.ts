@@ -156,11 +156,18 @@ describeEachBackend('authorization', backend => {
       const h = await createHarness({ knex, visibleEntityRefs: [] });
       await seed(h);
 
-      const registered = new Map<string, { action: Function }>();
+      type RegisteredAction = {
+        name: string;
+        action: (ctx: {
+          input: Record<string, unknown>;
+          credentials: unknown;
+        }) => Promise<unknown>;
+      };
+      const registered = new Map<string, RegisteredAction>();
       registerColophonActions({
         actionsRegistry: {
-          register: (d: { name: string; action: Function }) =>
-            registered.set(d.name, d),
+          register: (definition: RegisteredAction) =>
+            registered.set(definition.name, definition),
         } as never,
         colophon: h.colophon,
         authorizer: h.authorizer,
