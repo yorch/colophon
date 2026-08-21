@@ -233,10 +233,23 @@ strong {
 
 .site-nav ul {
   display: flex;
+  /* Centre rather than the flex default of stretch: `overflow-x: auto` below
+     makes the nav a little taller than its content, and a stretched item
+     would grow into that space. */
+  align-items: center;
   gap: 0.25rem;
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* The prose rule `li + li { margin-top }` is global and was reaching the nav,
+   pushing every item except the first down by a third of a line. It read as
+   "the current page's item is misaligned" only because the current item is
+   the first one on the home page — on any other page the first item is the
+   odd one out instead. */
+.site-nav li {
+  margin: 0;
 }
 
 .site-nav a {
