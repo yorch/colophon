@@ -4,6 +4,7 @@ import {
   DOCS_CONFIG_FILENAMES,
   type DocsConfig,
   docStatusSchema,
+  docsConfigSchema,
   docTypeSchema,
   parseDocsConfig,
   slugFromPath,
@@ -11,6 +12,7 @@ import {
 } from '@brnby/colophon-common';
 import fg from 'fast-glob';
 import { parse as parseYaml } from 'yaml';
+import { z } from 'zod';
 import { humanize } from './humanize';
 import { parsePage } from './markdown';
 import { mediaTypeFor } from './mediaType';
@@ -27,16 +29,39 @@ const ALWAYS_EXCLUDED = ['**/node_modules/**', '**/.*/**', '**/.*'];
 
 export async function readDocsConfig(docsDir: string): Promise<DocsConfig> {
   for (const filename of DOCS_CONFIG_FILENAMES) {
+    let raw: string;
     try {
-      const raw = await readFile(`${docsDir}/${filename}`, 'utf8');
-      return parseDocsConfig(parseYaml(raw) ?? {});
+      raw = await readFile(`${docsDir}/${filename}`, 'utf8');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new Error(
-          `Failed to read ${filename}: ${(error as Error).message}`,
-        );
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        continue;
       }
+      throw new Error(
+        `Could not read ${filename}: ${(error as Error).message}`,
+      );
     }
+
+    let parsed: unknown;
+    try {
+      parsed = parseYaml(raw) ?? {};
+    } catch (error) {
+      // The YAML parser's own message names the line and column, which is
+      // more use than anything this layer could add.
+      throw new Error(
+        `${filename} is not valid YAML: ${(error as Error).message}`,
+      );
+    }
+
+    const result = docsConfigSchema.safeParse(parsed);
+    if (!result.success) {
+      // docs.yaml is written by hand by people who will never read this
+      // source, so the message has to stand on its own. Raw zod output —
+      // a JSON array of issue objects — does not.
+      throw new Error(
+        `${filename} is not valid:\n${z.prettifyError(result.error)}`,
+      );
+    }
+    return result.data;
   }
   // Absent is the common case, not an error — conventions are the default.
   return parseDocsConfig({});

@@ -83,7 +83,21 @@ export const colophonPlugin = createBackendPlugin({
           id: 'colophon-sync-entity-links',
           ...entityLinkSchedule,
           fn: async () => {
-            await syncEntityLinks({ catalog, auth, db: colophon.db, logger });
+            try {
+              await syncEntityLinks({ catalog, auth, db: colophon.db, logger });
+            } catch (error) {
+              // Caught here rather than relying on the scheduler's behaviour
+              // for a rejected task, which the installed types do not state.
+              // A catalog outage should cost one skipped pass, visibly — not
+              // a schedule that may or may not still be running.
+              //
+              // Safe to swallow because replaceEntityLinks is transactional:
+              // a failed pass leaves the previous links intact rather than
+              // half-applied, so the next one starts from a consistent map.
+              logger.warn(
+                `Entity link sync failed; the previous links remain in effect and the next pass will retry: ${error}`,
+              );
+            }
           },
         });
       },

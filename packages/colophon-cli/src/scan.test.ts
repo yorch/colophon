@@ -124,3 +124,49 @@ describe('diagnostic line numbers', () => {
     expect(page.references[0].line).toBe(8);
   });
 });
+
+describe('docs.yaml errors', () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      made.splice(0).map(path => rm(path, { recursive: true, force: true })),
+    );
+  });
+
+  async function withConfig(yaml: string) {
+    await mkdir(TMP_ROOT, { recursive: true });
+    const dir = await mkdtemp(join(TMP_ROOT, 'cfg-'));
+    made.push(dir);
+    await writeFile(join(dir, 'docs.yaml'), yaml);
+    await writeFile(join(dir, 'index.md'), '---\ntitle: Home\n---\n\n# Home\n');
+    return dir;
+  }
+
+  // docs.yaml is written by hand by people who will never read this source,
+  // so the message has to stand on its own. Raw zod output — a JSON array of
+  // issue objects — does not.
+  it('names the file and the problem when the root is the wrong shape', async () => {
+    await expect(scan(await withConfig('- one\n- two\n'))).rejects.toThrow(
+      /docs\.yaml is not valid[\s\S]*expected object/,
+    );
+  });
+
+  it('points at the offending nav entry', async () => {
+    await expect(scan(await withConfig('nav:\n  - {}\n'))).rejects.toThrow(
+      /at nav\[0\]/,
+    );
+  });
+
+  it('says plainly when the YAML itself will not parse', async () => {
+    await expect(scan(await withConfig('nav: [unclosed\n'))).rejects.toThrow(
+      /docs\.yaml is not valid YAML/,
+    );
+  });
+
+  it('accepts a missing docs.yaml, which is the common case', async () => {
+    const dir = await mkdtemp(join(TMP_ROOT, 'cfg-'));
+    made.push(dir);
+    await writeFile(join(dir, 'index.md'), '# Home\n');
+    await expect(scan(dir)).resolves.toBeDefined();
+  });
+});
