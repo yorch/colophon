@@ -48,6 +48,16 @@ export interface ResolvedPage {
  * points at. A PR preview that is published and never pointed at costs a few
  * index rows, not a full re-chunk of the corpus.
  */
+/**
+ * Most chunks any single search may return.
+ *
+ * A service-level cap rather than an HTTP one: the MCP actions and the HTTP
+ * router both need it, and having the actions import it from the router made
+ * the agent surface depend on the web surface for a policy belonging to
+ * neither.
+ */
+export const MAX_SEARCH_LIMIT = 50;
+
 /** Page blobs read at once while indexing a revision. */
 const INGEST_CONCURRENCY = 12;
 

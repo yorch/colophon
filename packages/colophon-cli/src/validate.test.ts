@@ -227,7 +227,15 @@ describe('orphans and root', () => {
     expect(diagnostics.some(d => /no index.md/.test(d.message))).toBe(true);
   });
 
-  it('reports nothing for an empty bundle, which is a valid starting point', () => {
-    expect(validate({ pages: [], assets: [], nav: [] })).toHaveLength(0);
+  it('rejects an empty bundle rather than letting it empty a channel', () => {
+    // This assertion used to say an empty bundle was a valid starting point,
+    // which is the assumption that made a mistyped --docs-dir publishable:
+    // zero pages, zero diagnostics, and a channel repointed at a revision
+    // containing nothing, which reads to everyone else as the documentation
+    // having been deleted.
+    const diagnostics = validate({ pages: [], assets: [], nav: [] });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].level).toBe('error');
+    expect(diagnostics[0].message).toMatch(/no pages found/);
   });
 });

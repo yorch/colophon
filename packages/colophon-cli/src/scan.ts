@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import {
   DOCS_CONFIG_FILENAMES,
@@ -50,6 +50,20 @@ export async function readDocsConfig(docsDir: string): Promise<DocsConfig> {
  * and fonts often enough that an allow-list becomes a support burden.
  */
 export async function scan(docsDir: string): Promise<ScanResult> {
+  // fast-glob returns [] for a directory that does not exist rather than
+  // throwing, and every downstream check iterates an empty array happily. A
+  // mistyped path would therefore publish an empty bundle and repoint the
+  // channel at it — deleting a repository's documentation from the portal on
+  // a green CI run. This is the only layer that can still tell "missing"
+  // from "empty", so it must not discard the distinction.
+  const stats = await stat(docsDir).catch(() => undefined);
+  if (!stats) {
+    throw new Error(`Documentation directory "${docsDir}" does not exist`);
+  }
+  if (!stats.isDirectory()) {
+    throw new Error(`"${docsDir}" is not a directory`);
+  }
+
   const config = await readDocsConfig(docsDir);
   const exclude = [...ALWAYS_EXCLUDED, ...config.exclude];
 

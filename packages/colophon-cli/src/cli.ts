@@ -79,6 +79,9 @@ export function createCli(io: CliIo = defaultIo): Command {
     )
     .option('--s3-bucket <name>', 'bucket when --storage s3')
     .option('--s3-region <name>', 'region when --storage s3')
+    .option('--s3-prefix <path>', 'key prefix; must match the backend config')
+    .option('--s3-endpoint <url>', 'custom endpoint for MinIO, R2 and similar')
+    .option('--s3-force-path-style', 'path-style addressing, for MinIO', false)
     .option('--source-url <url>', 'repository URL', '')
     .option('--source-ref <ref>', 'branch or tag', '')
     .option('--source-commit <sha>', 'commit sha', '')
@@ -160,6 +163,9 @@ interface PublishCommandOptions {
   localDir: string;
   s3Bucket?: string;
   s3Region?: string;
+  s3Prefix?: string;
+  s3Endpoint?: string;
+  s3ForcePathStyle?: boolean;
   sourceUrl: string;
   sourceRef: string;
   sourceCommit: string;
@@ -179,6 +185,9 @@ export function createStorage(options: {
   localDir: string;
   s3Bucket?: string;
   s3Region?: string;
+  s3Prefix?: string;
+  s3Endpoint?: string;
+  s3ForcePathStyle?: boolean;
 }): BundleStorage {
   if (options.storage === 's3') {
     if (!options.s3Bucket) {
@@ -187,6 +196,9 @@ export function createStorage(options: {
     return new S3BundleStorage({
       bucket: options.s3Bucket,
       region: options.s3Region,
+      prefix: options.s3Prefix,
+      endpoint: options.s3Endpoint,
+      forcePathStyle: options.s3ForcePathStyle,
     });
   }
   if (options.storage !== 'local') {

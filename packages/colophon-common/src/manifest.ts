@@ -17,15 +17,25 @@ import { bundleIdSchema, contentHashSchema, revisionIdSchema } from './ids';
  * groups the UI, lets agents filter ("a how-to, not an explainer"), and nudges
  * authors toward one purpose per page — which is what makes heading-level
  * chunks self-contained. */
-export const docTypeSchema = z.enum([
+/**
+ * Values, separate from the schema, because a consumer that must build its
+ * own zod instance — the MCP actions registry injects one — can still reuse
+ * the vocabulary. Hardcoding the list there meant adding a fifth type would
+ * leave the agent surface silently rejecting it.
+ */
+export const DOC_TYPES = [
   'tutorial',
   'how-to',
   'reference',
   'explanation',
-]);
+] as const;
+
+export const docTypeSchema = z.enum(DOC_TYPES);
 export type DocType = z.infer<typeof docTypeSchema>;
 
-export const docStatusSchema = z.enum(['current', 'draft', 'deprecated']);
+export const DOC_STATUSES = ['current', 'draft', 'deprecated'] as const;
+
+export const docStatusSchema = z.enum(DOC_STATUSES);
 export type DocStatus = z.infer<typeof docStatusSchema>;
 
 /** A heading within a page. `anchor` is the slugified id used for deep links,

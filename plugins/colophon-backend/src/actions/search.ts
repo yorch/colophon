@@ -1,5 +1,6 @@
+import { DOC_TYPES } from '@brnby/colophon-common';
+import { MAX_SEARCH_LIMIT } from '../service/ColophonService';
 import { pageUrl } from '../service/links';
-import { MAX_SEARCH_LIMIT } from '../service/router';
 import { linkForSlug } from './targets';
 import { CHANNEL_HINT, type ColophonActionDeps } from './types';
 
@@ -45,7 +46,7 @@ export function registerSearchAction(deps: ColophonActionDeps): void {
             .optional()
             .describe('Restrict to these documentation bundles.'),
           type: z
-            .enum(['tutorial', 'how-to', 'reference', 'explanation'])
+            .enum(DOC_TYPES)
             .optional()
             .describe(
               'Restrict by Diataxis document type — "how-to" for procedures, ' +

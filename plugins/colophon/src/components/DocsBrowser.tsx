@@ -96,7 +96,16 @@ export function DocsBrowser({
 
   // Default to the subtree's own entry page rather than the bundle root, so a
   // scoped entity tab opens on that entity's documentation.
-  const activeSlug = slug ?? subpath ?? pages[0]?.slug;
+  // The landing page has the EMPTY slug, which is falsy, so it cannot be
+  // told apart from "no page requested" by ?? alone — the chain used to fall
+  // through to pages[0], i.e. whichever page sorts first by path. Opening a
+  // bundle showed an arbitrary page rather than its index.md. Resolve by
+  // identity: the entry page of the current scope, falling back to position
+  // only when no such page exists.
+  const entrySlug = subpath ?? '';
+  const activeSlug =
+    slug ??
+    (pages.some(page => page.slug === entrySlug) ? entrySlug : pages[0]?.slug);
   const page = pages.find(candidate => candidate.slug === activeSlug);
 
   useEffect(() => {

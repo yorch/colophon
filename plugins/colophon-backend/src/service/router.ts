@@ -13,7 +13,7 @@ import {
 import express, { type Request } from 'express';
 import Router from 'express-promise-router';
 import { z } from 'zod';
-import type { ColophonService } from './ColophonService';
+import { type ColophonService, MAX_SEARCH_LIMIT } from './ColophonService';
 
 /** Query strings arrive as string, string[] or undefined — normalise once. */
 const listParam = z
@@ -52,8 +52,6 @@ const registerRevisionBody = z.object({
 function wildcardParam(req: Request): string | undefined {
   return (req.params as Record<string, string | undefined>)[0];
 }
-
-export const MAX_SEARCH_LIMIT = 50;
 
 const indexableQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),

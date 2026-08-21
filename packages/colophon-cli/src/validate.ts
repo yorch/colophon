@@ -77,7 +77,17 @@ function checkTitles(pages: PageDraft[]): Diagnostic[] {
 
 function checkRoot(pages: PageDraft[]): Diagnostic[] {
   if (pages.length === 0) {
-    return [];
+    // An empty bundle is almost always a wrong --docs-dir, a too-broad
+    // exclude, or a build that produced nothing. Publishing it repoints the
+    // channel at a revision with no pages, which reads to everyone else as
+    // the documentation having been deleted.
+    return [
+      {
+        level: 'error',
+        message:
+          'no pages found; publishing this would empty the bundle. Check the docs directory and any exclude patterns',
+      },
+    ];
   }
   return pages.some(page => page.slug === '')
     ? []

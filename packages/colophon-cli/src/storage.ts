@@ -55,16 +55,43 @@ export class LocalBundleStorage implements BundleStorage {
 export class S3BundleStorage implements BundleStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
+  readonly #prefix: string;
 
-  constructor(options: { bucket: string; region?: string; client?: S3Client }) {
+  constructor(options: {
+    bucket: string;
+    region?: string;
+    /** Key prefix, matching the backend's `colophon.storage.s3.prefix`. */
+    prefix?: string;
+    /** Custom endpoint, for MinIO, R2 and other S3-compatible stores. */
+    endpoint?: string;
+    forcePathStyle?: boolean;
+    client?: S3Client;
+  }) {
     this.#bucket = options.bucket;
-    this.#client = options.client ?? new S3Client({ region: options.region });
+    // The prefix is part of the effective key, so the publisher and the
+    // backend must apply the same one. Supporting it on only one side means
+    // publishing succeeds to the bucket root while the backend 404s every
+    // page — a misconfiguration that looks like a successful publish.
+    this.#prefix = options.prefix
+      ? `${options.prefix.replace(/\/+$/, '')}/`
+      : '';
+    this.#client =
+      options.client ??
+      new S3Client({
+        region: options.region,
+        endpoint: options.endpoint,
+        forcePathStyle: options.forcePathStyle,
+      });
+  }
+
+  #key(key: string): string {
+    return `${this.#prefix}${key}`;
   }
 
   async has(key: string): Promise<boolean> {
     try {
       await this.#client.send(
-        new HeadObjectCommand({ Bucket: this.#bucket, Key: key }),
+        new HeadObjectCommand({ Bucket: this.#bucket, Key: this.#key(key) }),
       );
       return true;
     } catch (error) {
@@ -90,7 +117,7 @@ export class S3BundleStorage implements BundleStorage {
     await this.#client.send(
       new PutObjectCommand({
         Bucket: this.#bucket,
-        Key: key,
+        Key: this.#key(key),
         Body: body,
         ContentType: contentType,
       }),
@@ -99,7 +126,7 @@ export class S3BundleStorage implements BundleStorage {
 
   async get(key: string): Promise<Buffer> {
     const result = await this.#client.send(
-      new GetObjectCommand({ Bucket: this.#bucket, Key: key }),
+      new GetObjectCommand({ Bucket: this.#bucket, Key: this.#key(key) }),
     );
     if (!result.Body) {
       // S3 only omits the body for a zero-byte object or a malformed
