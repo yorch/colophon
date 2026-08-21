@@ -2,6 +2,7 @@ import {
   bundleIdSchema,
   channelSchema,
   formatBundleRef,
+  isWithinSubpath,
   normalizeSlug,
   parseBundleRef,
   slugFromPath,
@@ -118,5 +119,35 @@ describe('parseBundleRef', () => {
     ]) {
       expect(formatBundleRef(parseBundleRef(value))).toBe(value);
     }
+  });
+});
+
+describe('isWithinSubpath', () => {
+  // Contract, not a local helper: the frontend decides what an entity's docs
+  // tab shows with it and the backend decides what the MCP actions return.
+  it('admits everything when no subpath is set', () => {
+    expect(isWithinSubpath('anything/at/all')).toBe(true);
+  });
+
+  it('admits the subpath root itself', () => {
+    expect(isWithinSubpath('services/billing', 'services/billing')).toBe(true);
+  });
+
+  it('admits a descendant', () => {
+    expect(isWithinSubpath('services/billing/api', 'services/billing')).toBe(
+      true,
+    );
+  });
+
+  it('rejects a sibling that merely shares a prefix', () => {
+    // Matching on the segment boundary is what keeps services/billing from
+    // also claiming services/billing-v2.
+    expect(isWithinSubpath('services/billing-v2', 'services/billing')).toBe(
+      false,
+    );
+  });
+
+  it('rejects an unrelated page', () => {
+    expect(isWithinSubpath('guides/deploy', 'services/billing')).toBe(false);
   });
 });

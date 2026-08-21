@@ -1,9 +1,5 @@
 import type { Entity } from '@backstage/catalog-model';
-import {
-  isColophonAvailable,
-  isWithinSubpath,
-  readBundleRef,
-} from './annotation';
+import { isColophonAvailable, readBundleRef } from './annotation';
 
 function entity(annotation?: string): Entity {
   return {
@@ -57,33 +53,5 @@ describe('isColophonAvailable', () => {
     ['no annotation', undefined, false],
   ])('is %s -> %s', (_name, annotation, expected) => {
     expect(isColophonAvailable(entity(annotation))).toBe(expected);
-  });
-});
-
-describe('isWithinSubpath', () => {
-  it('admits everything when no subpath is set', () => {
-    expect(isWithinSubpath('anything/at/all')).toBe(true);
-  });
-
-  it('admits the subpath root itself', () => {
-    expect(isWithinSubpath('services/billing', 'services/billing')).toBe(true);
-  });
-
-  it('admits a descendant', () => {
-    expect(isWithinSubpath('services/billing/api', 'services/billing')).toBe(
-      true,
-    );
-  });
-
-  it('rejects a sibling that merely shares a prefix', () => {
-    // Matching on the segment boundary is what keeps services/billing from
-    // also claiming services/billing-v2.
-    expect(isWithinSubpath('services/billing-v2', 'services/billing')).toBe(
-      false,
-    );
-  });
-
-  it('rejects an unrelated page', () => {
-    expect(isWithinSubpath('guides/deploy', 'services/billing')).toBe(false);
   });
 });

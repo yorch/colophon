@@ -134,14 +134,34 @@ export async function upload(options: {
     bytesSkipped: 0,
   };
 
+  // Hashes come from the manifest rather than being recomputed. build()
+  // already hashed every byte to produce them, and re-deriving them here
+  // would both repeat that pass over the whole bundle and admit the
+  // possibility of the two disagreeing — which would upload a blob under a
+  // key the manifest does not reference.
+  const hashByPath = new Map<string, string>([
+    ...manifest.pages.map(page => [page.path, page.contentHash] as const),
+    ...manifest.assets.map(asset => [asset.path, asset.contentHash] as const),
+  ]);
+
+  const hashFor = (path: string): string => {
+    const hash = hashByPath.get(path);
+    if (!hash) {
+      throw new Error(
+        `"${path}" is not in the manifest; upload was given content build() did not see`,
+      );
+    }
+    return hash;
+  };
+
   const blobs: Array<{ hash: string; bytes: Buffer; contentType: string }> = [
     ...options.pages.map(page => ({
-      hash: sha256(page.rawBytes),
+      hash: hashFor(page.path),
       bytes: page.rawBytes,
       contentType: 'text/markdown; charset=utf-8',
     })),
     ...options.assets.map(asset => ({
-      hash: sha256(asset.bytes),
+      hash: hashFor(asset.path),
       bytes: asset.bytes,
       contentType: asset.mediaType,
     })),

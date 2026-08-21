@@ -570,11 +570,16 @@ export class ColophonDatabase {
    * with `latest`, `1.x` and `pr-42` would otherwise return the same page once
    * per channel.
    */
-  async listIndexableChunks(options: {
-    offset: number;
-    limit: number;
-  }): Promise<{ rows: IndexableChunkRow[]; total: number }> {
-    const base = this.#knex('colophon_chunks as c')
+  /**
+   * Chunks joined to the revision, channel and page they belong to.
+   *
+   * Both retrieval paths need exactly this shape: a chunk is only reachable
+   * through a channel, and its page metadata is what makes a result useful.
+   * Keeping the join in one place means the two cannot drift into disagreeing
+   * about which chunks are visible.
+   */
+  #chunksWithContext(): Knex.QueryBuilder {
+    return this.#knex('colophon_chunks as c')
       .join('colophon_revisions as r', 'r.revision_id', 'c.revision_id')
       .join('colophon_channels as ch', function join() {
         this.on('ch.revision_id', 'c.revision_id').andOn(
@@ -584,8 +589,14 @@ export class ColophonDatabase {
       })
       .join('colophon_pages as p', function join() {
         this.on('p.revision_id', 'c.revision_id').andOn('p.slug', 'c.slug');
-      })
-      .where('ch.is_default', true);
+      });
+  }
+
+  async listIndexableChunks(options: {
+    offset: number;
+    limit: number;
+  }): Promise<{ rows: IndexableChunkRow[]; total: number }> {
+    const base = this.#chunksWithContext().where('ch.is_default', true);
 
     const [countRow] = await base.clone().count({ total: '*' });
     const rows: IndexableChunkRow[] = await base
@@ -630,17 +641,7 @@ export class ColophonDatabase {
       return { hits: [], total: 0 };
     }
 
-    const base = this.#knex('colophon_chunks as c')
-      .join('colophon_revisions as r', 'r.revision_id', 'c.revision_id')
-      .join('colophon_channels as ch', function join() {
-        this.on('ch.revision_id', 'c.revision_id').andOn(
-          'ch.bundle_id',
-          'r.bundle_id',
-        );
-      })
-      .join('colophon_pages as p', function join() {
-        this.on('p.revision_id', 'c.revision_id').andOn('p.slug', 'c.slug');
-      });
+    const base = this.#chunksWithContext();
 
     if (options.channel) {
       base.where('ch.channel', options.channel);

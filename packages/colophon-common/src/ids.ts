@@ -117,3 +117,21 @@ export function slugFromPath(path: string): string {
   }
   return segments.join('/');
 }
+
+/**
+ * Whether a page is inside the subtree an entity is scoped to.
+ *
+ * This is contract, not a local predicate. The frontend uses it to decide
+ * what an entity's docs tab shows and the backend uses it to decide what the
+ * MCP actions return; if the two disagreed, a tab would list pages an agent
+ * could not retrieve, or an agent would cite pages the tab never shows.
+ *
+ * Matching on a segment boundary is what keeps `services/billing` from also
+ * claiming `services/billing-v2`.
+ */
+export function isWithinSubpath(slug: string, subpath?: string): boolean {
+  if (!subpath) {
+    return true;
+  }
+  return slug === subpath || slug.startsWith(`${subpath}/`);
+}

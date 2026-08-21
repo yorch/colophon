@@ -1,4 +1,5 @@
 import { InputError, NotFoundError } from '@backstage/errors';
+import { isWithinSubpath } from '@brnby/colophon-common';
 import type { ColophonDatabase, EntityLinkRecord } from '../database';
 
 export interface BundleTarget {
@@ -38,11 +39,7 @@ export async function resolveTarget(
 
 /** True when a slug is inside a target's scope. */
 export function inScope(target: BundleTarget, slug: string): boolean {
-  return (
-    !target.subpath ||
-    slug === target.subpath ||
-    slug.startsWith(`${target.subpath}/`)
-  );
+  return isWithinSubpath(slug, target.subpath);
 }
 
 /** The most specific entity attached to a slug, for building a deep link. */
@@ -53,11 +50,7 @@ export function linkForSlug(
 ): EntityLinkRecord | undefined {
   return links
     .filter(
-      link =>
-        link.bundleId === bundleId &&
-        (!link.subpath ||
-          slug === link.subpath ||
-          slug.startsWith(`${link.subpath}/`)),
+      link => link.bundleId === bundleId && isWithinSubpath(slug, link.subpath),
     )
     .sort((a, b) => (b.subpath?.length ?? 0) - (a.subpath?.length ?? 0))[0];
 }

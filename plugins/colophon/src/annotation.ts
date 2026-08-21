@@ -2,8 +2,13 @@ import type { Entity } from '@backstage/catalog-model';
 import {
   type BundleRef,
   COLOPHON_ANNOTATION,
+  isWithinSubpath,
   parseBundleRef,
 } from '@brnby/colophon-common';
+
+// Re-exported so callers in this package keep importing it from here, while
+// the single definition lives in the contract both sides share.
+export { isWithinSubpath };
 
 /**
  * Reads an entity's Colophon annotation.
@@ -27,18 +32,4 @@ export function readBundleRef(entity: Entity): BundleRef | undefined {
 /** Whether to show the docs tab for an entity. */
 export function isColophonAvailable(entity: Entity): boolean {
   return readBundleRef(entity) !== undefined;
-}
-
-/**
- * Whether a page belongs to the subtree an entity is scoped to.
- *
- * The `#subpath` form is what lets several catalog components share one docs
- * tree: each entity's tab shows only its own section. Matching on a segment
- * boundary keeps `services/billing` from also matching `services/billing-v2`.
- */
-export function isWithinSubpath(slug: string, subpath?: string): boolean {
-  if (!subpath) {
-    return true;
-  }
-  return slug === subpath || slug.startsWith(`${subpath}/`);
 }
