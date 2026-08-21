@@ -383,54 +383,69 @@ describe('size rules', () => {
 });
 
 describe('overlap', () => {
-  it('repeats the tail of the previous chunk when asked to', () => {
-    const chunks = chunkPage(
-      {
-        title: 'P',
-        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
-      },
-      opts({ overlapChars: 40 }),
-    );
-    expect(chunks[1].text.startsWith('beta')).toBe(false);
-    expect(chunks[1].text).toContain('alpha');
+  /** One section long enough that the size ceiling splits it. */
+  const longSection = (label: string, paragraphs: number) =>
+    `## ${label}\n\n${Array.from({ length: paragraphs }, (_, i) => `${label}${i} ${body(label)}`).join('\n\n')}`;
+
+  const withOverlap = (markdown: string, overlapChars = 40) =>
+    chunkPage({ title: 'P', markdown }, opts({ maxChars: 400, overlapChars }));
+
+  it('repeats the tail of the previous chunk across a split', () => {
+    // A split inside one section falls wherever the ceiling landed, so the
+    // cut is arbitrary and the repetition restores what it removed. The
+    // repeated text is the END of the previous chunk, not its beginning.
+    const chunks = withOverlap(longSection('alpha', 4));
+    expect(chunks.length).toBeGreaterThan(1);
+    const [repeated] = chunks[1].text.split('\n\n');
+    expect(chunks[0].text.endsWith(repeated)).toBe(true);
   });
 
   it('starts the overlap at a word boundary rather than mid-word', () => {
-    const chunks = chunkPage(
-      {
-        title: 'P',
-        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
-      },
-      opts({ overlapChars: 40 }),
-    );
-    expect(chunks[1].text).toMatch(/^alpha/);
+    const chunks = withOverlap(longSection('alpha', 4));
+    expect(chunks[1].text).not.toMatch(/^\s/);
+    expect(chunks[1].text.split(/\s/)[0]).not.toBe('');
   });
 
-  it('does not compound overlap down a long page', () => {
-    // Overlap is taken from the previous chunk's own text, so chunk three
-    // must carry a tail of chunk two only — never chunk one's as well.
-    const chunks = chunkPage(
-      {
-        title: 'P',
-        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body(
-          'beta',
-        )}\n\n## C\n\n${body('gamma')}`,
-      },
-      opts({ overlapChars: 40 }),
-    );
-    expect(chunks[2].text).toContain('beta');
-    expect(chunks[2].text).not.toContain('alpha');
+  it('does not begin a chunk with a stray blank line', () => {
+    // The tail must consume the whole whitespace run, not one character of
+    // it, or a paragraph break leaves its second newline behind.
+    for (const chunk of withOverlap(longSection('alpha', 6))) {
+      expect(chunk.text).toBe(chunk.text.trimStart());
+    }
   });
 
-  it('leaves the first chunk untouched, there being nothing before it', () => {
-    const chunks = chunkPage(
-      {
-        title: 'P',
-        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
-      },
-      opts({ overlapChars: 40 }),
+  it('does not compound overlap down a long section', () => {
+    // Overlap comes from the previous chunk's own text, so the third chunk
+    // carries a tail of the second only.
+    const chunks = withOverlap(longSection('alpha', 8));
+    expect(chunks.length).toBeGreaterThan(2);
+    expect(chunks[2].text).not.toContain('alpha0 ');
+  });
+
+  it('resets at a heading, so a section never opens with the previous one', () => {
+    // A chunk anchored at B carrying A's prose would have an agent cite A's
+    // content under B's heading and deep link.
+    const chunks = withOverlap(
+      `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
     );
-    expect(chunks[0].text).toBe(body('alpha'));
+    const sectionB = chunks.find(chunk => chunk.anchor === 'b');
+    expect(sectionB?.text).not.toContain('alpha');
+    expect(sectionB?.text.startsWith('beta')).toBe(true);
+  });
+
+  it('leaves the first chunk of every section untouched', () => {
+    const chunks = withOverlap(
+      `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
+    );
+    expect(chunks.find(c => c.anchor === 'a')?.text).toBe(body('alpha'));
+    expect(chunks.find(c => c.anchor === 'b')?.text).toBe(body('beta'));
+  });
+
+  it('changes nothing when overlap is off, which is the default', () => {
+    const markdown = longSection('alpha', 4);
+    expect(withOverlap(markdown, 0)).toEqual(
+      chunkPage({ title: 'P', markdown }, opts({ maxChars: 400 })),
+    );
   });
 });
 

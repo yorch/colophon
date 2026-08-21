@@ -114,9 +114,11 @@ function overlapTail(text: string, chars: number): string {
   if (chars <= 0 || text.length <= chars) {
     return text;
   }
-  const tail = text.slice(-chars);
-  const boundary = tail.search(/\s/);
-  return boundary === -1 ? tail : tail.slice(boundary + 1);
+  // Drop the partial leading word AND the whole whitespace run after it.
+  // Consuming a single character instead left the second newline of a
+  // paragraph break behind, so the chunk began with a stray blank line.
+  const tail = text.slice(-chars).replace(/^\S*\s+/, '');
+  return tail || text.slice(-chars);
 }
 
 function normalizeHeading(value: string): string {
@@ -219,8 +221,16 @@ export function chunkPage(
   const chunks: DerivedChunk[] = [];
   // Overlap is taken from the previous chunk's OWN text, never from its
   // already-overlapped form, so the repetition does not compound down a page.
-  let previous = '';
   for (const section of kept) {
+    // Overlap is scoped to splits WITHIN a section, and resets at every
+    // heading. A split inside one section is arbitrary — it falls wherever
+    // the size ceiling landed — so repeating a tail restores the continuity
+    // the cut removed. A heading boundary is not arbitrary: it is the
+    // semantic edge, and the breadcrumb already carries it. Carrying the
+    // previous section's prose across would open a chunk anchored at this
+    // heading with the previous heading's content, and an agent citing it
+    // would attribute that text to the wrong section.
+    let previous = '';
     for (const group of packBlocks(allBlocks(section), maxChars)) {
       const text = group.join('\n\n').trim();
       if (!text) {
