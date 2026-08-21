@@ -336,6 +336,43 @@ status: current       <span class="cm"># current | draft | deprecated</span>
               page — which is what makes sections self-contained.
             </p>
 
+            <h3>docs.yaml</h3>
+            <p>
+              Every field is optional, and so is the file. It exists for what conventions
+              cannot express: an ordering that is not alphabetical, a group header with no
+              page of its own, pages held back from publication.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>docs.yaml</figcaption>
+              <pre><code>title: Payments docs      <span class="cm"># overrides the title from the root page</span>
+defaultType: reference    <span class="cm"># type for pages whose frontmatter omits one</span>
+exclude:                  <span class="cm"># globs, relative to the docs root</span>
+  - drafts/**
+nav:                      <span class="cm"># when present, wins over the directory tree</span>
+  - title: Guides
+    children:
+      - page: guides/deploy.md</code></pre>
+            </figure>
+
+            <p>
+              A misspelled key is an error rather than a silent no-op. Writing
+              <code>navigation:</code> instead of <code>nav:</code> used to mean a carefully
+              ordered nav simply never applied, on a green build.
+            </p>
+            <p>
+              Exclude patterns are relative to the docs root, so a leading slash matches
+              nothing: <code>/drafts/**</code> publishes the drafts,
+              <code>drafts/**</code> withholds them. A pattern matching no files is
+              reported, which is what makes that trap visible.
+            </p>
+            <p>
+              <code>--strict</code> promotes every advisory to an error: a missing
+              description, a page missing from the nav, a bundle with no landing page, an
+              exclude that matches nothing. Adopt it once your docs are clean — it is the
+              difference between a warning nobody reads and a gate.
+            </p>
+
             <h3>Write sections that survive being read alone</h3>
             <p>
               Retrieval cuts pages into chunks at H2 and H3, and every section is retrieved
