@@ -7,14 +7,8 @@
 // redundant `import React` into every .tsx that Biome then flags as unused.
 {
   "extends": "@backstage/cli/config/tsconfig.json",
-  "include": [
-    "packages",
-    "plugins",
-    "dev-app"
-  ],
-  "exclude": [
-    "node_modules"
-  ],
+  "include": ["packages", "plugins", "dev-app"],
+  "exclude": ["node_modules"],
   "compilerOptions": {
     "outDir": "dist-types",
     "rootDir": ".",
