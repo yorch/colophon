@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   type ChunkingOptions,
   DEFAULT_CHUNKING_OPTIONS,
+  stripFrontmatter,
 } from '@brnby/colophon-common';
 import GithubSlugger from 'github-slugger';
 import { toString as mdastToString } from 'mdast-util-to-string';
@@ -43,19 +44,7 @@ interface Section {
   blocks: string[];
 }
 
-/**
- * YAML frontmatter is stripped before parsing rather than parsed as content.
- * Without remark-frontmatter, `title: Foo` followed by `---` reads as a setext
- * heading, which would put the frontmatter into the first chunk and invent a
- * heading that does not exist.
- */
-const FRONTMATTER = /^\uFEFF?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/;
-
 const parser = unified().use(remarkParse).use(remarkGfm);
-
-function stripFrontmatter(markdown: string): string {
-  return markdown.replace(FRONTMATTER, '');
-}
 
 /** Everything the section will emit, in document order. */
 function allBlocks(section: Section): string[] {

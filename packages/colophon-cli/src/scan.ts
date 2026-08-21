@@ -7,9 +7,9 @@ import {
   docTypeSchema,
   parseDocsConfig,
   slugFromPath,
+  splitFrontmatter,
 } from '@brnby/colophon-common';
 import fg from 'fast-glob';
-import matter from 'gray-matter';
 import { parse as parseYaml } from 'yaml';
 import { humanize } from './humanize';
 import { parsePage } from './markdown';
@@ -80,9 +80,12 @@ export async function scan(docsDir: string): Promise<ScanResult> {
 }
 
 function toPageDraft(path: string, rawBytes: Buffer): PageDraft {
-  const parsed = matter(rawBytes.toString('utf8'));
-  const data = parsed.data as Record<string, unknown>;
-  const { headings, references } = parsePage(parsed.content);
+  // Frontmatter boundaries come from the contract rather than from a parser
+  // of our own choosing, so the body we validate anchors against is byte for
+  // byte the body the backend chunks.
+  const { frontmatter, body } = splitFrontmatter(rawBytes.toString('utf8'));
+  const data = parseFrontmatterData(frontmatter);
+  const { headings, references } = parsePage(body);
 
   return {
     path,
@@ -96,8 +99,30 @@ function toPageDraft(path: string, rawBytes: Buffer): PageDraft {
     headings,
     references,
     rawBytes,
-    body: parsed.content,
+    body,
   };
+}
+
+/**
+ * Frontmatter must be a YAML mapping. Anything else — a list, a scalar, a
+ * syntax error — is reported as an empty mapping rather than thrown, so one
+ * malformed page degrades to "no metadata" instead of failing the publish
+ * before the validator can say which page is at fault.
+ */
+function parseFrontmatterData(
+  frontmatter: string | undefined,
+): Record<string, unknown> {
+  if (!frontmatter?.trim()) {
+    return {};
+  }
+  try {
+    const parsed = parseYaml(frontmatter);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Frontmatter, then the first H1, then the filename. */

@@ -68,9 +68,15 @@ export class S3BundleStorage implements BundleStorage {
       );
       return true;
     } catch (error) {
-      // A missing object is the expected case on a first publish, so only a
-      // genuine 404 counts as absence — anything else is a real failure and
-      // must not be silently treated as "not there, upload again".
+      // 403 counts as absence here, deliberately, and unlike in the backend.
+      // S3 answers HeadObject on a missing key with 403 rather than 404 when
+      // the caller lacks s3:ListBucket — which is precisely the write-only
+      // role CI should be given. Treating it as an error would make the
+      // least-privilege setup the one that fails.
+      //
+      // The cost is bounded: a genuine permissions problem only means the
+      // upload is attempted, and put() then fails loudly rather than
+      // silently skipping content.
       const status = (error as { $metadata?: { httpStatusCode?: number } })
         .$metadata?.httpStatusCode;
       if (status === 404 || status === 403) {
