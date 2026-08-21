@@ -146,6 +146,43 @@ describe('link validation', () => {
   });
 });
 
+describe('percent-encoded targets', () => {
+  it('accepts a link to a filename containing a space', () => {
+    // Percent-encoding is the ordinary way to write this link; rejecting it
+    // failed the whole publish.
+    const pages = [
+      page('a', { references: [{ url: 'my%20guide.md', kind: 'link' }] }),
+      page('my guide', { path: 'my guide.md' }),
+    ];
+    const diagnostics = validate({
+      pages,
+      assets: [],
+      nav: nav(['a', 'my guide']),
+    });
+    expect(diagnostics.filter(d => d.level === 'error')).toHaveLength(0);
+  });
+
+  it('still rejects an encoded link to a page that does not exist', () => {
+    const pages = [
+      page('a', { references: [{ url: 'no%20such.md', kind: 'link' }] }),
+    ];
+    expect(
+      validate({ pages, assets: [], nav: nav(['a']) }).some(
+        d => d.level === 'error',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not throw on a malformed escape sequence', () => {
+    const pages = [
+      page('a', { references: [{ url: '%E0%A4.md', kind: 'link' }] }),
+    ];
+    expect(() =>
+      validate({ pages, assets: [], nav: nav(['a']) }),
+    ).not.toThrow();
+  });
+});
+
 describe('descriptions', () => {
   it('warns by default so adoption is not blocked on day one', () => {
     const pages = [page('a', { description: undefined })];

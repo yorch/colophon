@@ -135,7 +135,18 @@ export class ColophonService {
       options.bundleId,
       options.revisionId,
     );
-    await this.collectGarbage(options.bundleId);
+    // Housekeeping must not fail a publish whose work has already landed.
+    // The channel is repointed and the revision indexed by this line; a
+    // retention error here means old rows linger until the next run, which
+    // is a far better outcome than CI reporting a failed publish.
+    try {
+      await this.collectGarbage(options.bundleId);
+    } catch (error) {
+      this.#logger.warn(
+        `Retention pass failed for ${options.bundleId}; stale revisions will be collected on the next publish`,
+        error as Error,
+      );
+    }
     return {
       channel: await this.#db.resolveChannel(options.bundleId, options.channel),
       ingest,
@@ -211,12 +222,11 @@ export class ColophonService {
    * decision, not this plugin's.
    */
   async collectGarbage(bundleId: string): Promise<string[]> {
-    const stale = await this.#db.findUnreferencedRevisions(
+    const stale = await this.#db.collectUnreferencedRevisions(
       bundleId,
       this.#retention.revisionsPerChannel,
     );
     if (stale.length > 0) {
-      await this.#db.deleteRevisions(stale);
       this.#logger.info(
         `Retention: dropped ${stale.length} unreferenced revisions of ${bundleId}`,
       );

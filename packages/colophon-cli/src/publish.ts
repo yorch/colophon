@@ -88,7 +88,14 @@ export async function build(options: PublishOptions): Promise<BuildResult> {
   const identity = {
     schemaVersion: MANIFEST_SCHEMA_VERSION,
     bundleId: options.bundleId,
-    source: { type: 'git' as const, path: 'docs', ...options.source },
+    // Spread first, then default, so an explicit `path: undefined` from a
+    // programmatic caller cannot clobber it — canonicalize drops undefined
+    // keys, which would silently change the revision id.
+    source: {
+      type: 'git' as const,
+      ...options.source,
+      path: options.source.path ?? 'docs',
+    },
     title: config.title ?? root?.title ?? options.bundleId,
     description: config.description ?? root?.description,
     pages: manifestPages,

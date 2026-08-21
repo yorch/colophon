@@ -187,10 +187,22 @@ function isExternal(url: string): boolean {
 
 function splitFragment(url: string): [string, string | undefined] {
   const index = url.indexOf('#');
-  if (index === -1) {
-    return [url, undefined];
+  const target = index === -1 ? url : url.slice(0, index);
+  const fragment = index === -1 ? undefined : url.slice(index + 1);
+  // The target is decoded as well as the fragment. Percent-encoding is the
+  // ordinary way to link a filename containing a space, and comparing the
+  // raw "my%20guide.md" against a real "my guide.md" reported a broken link
+  // and failed the publish.
+  return [decodeSafely(target), fragment && decodeSafely(fragment)];
+}
+
+/** Malformed escapes are left as-is rather than throwing URIError. */
+function decodeSafely(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
-  return [url.slice(0, index), decodeURIComponent(url.slice(index + 1))];
 }
 
 /** Resolves a link relative to the linking page, staying inside the bundle. */

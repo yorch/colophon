@@ -131,6 +131,16 @@ describe('revision identity', () => {
     expect(a).toBe(b);
   });
 
+  it('ignores an explicitly undefined source path', async () => {
+    // canonicalize drops undefined keys, so letting one clobber the default
+    // would silently mint a different revision for identical documentation.
+    const withDefault = await revisionFor();
+    const withUndefined = await revisionFor({
+      source: { ...SOURCE, path: undefined as unknown as string },
+    });
+    expect(withUndefined).toBe(withDefault);
+  });
+
   it('changes when the source commit changes', async () => {
     const a = await revisionFor();
     const b = await revisionFor({ source: { ...SOURCE, commit: 'def456' } });

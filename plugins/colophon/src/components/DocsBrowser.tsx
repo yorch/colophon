@@ -8,6 +8,7 @@ import {
   ColophonToc,
 } from '@brnby/plugin-colophon-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
@@ -36,9 +37,34 @@ export function DocsBrowser({
   onChannelChange,
 }: DocsBrowserProps) {
   const api = useApi(colophonApiRef);
+
+  /**
+   * Which page to show comes from `?page=`, never from the fragment.
+   *
+   * The fragment belongs to heading anchors: a table-of-contents entry and a
+   * `#heading` link inside a page both use it. An earlier version drove page
+   * navigation from the fragment too, so clicking any heading link tried to
+   * open a page named after that heading and produced a 404.
+   */
+  const [searchParams] = useSearchParams();
+  const slug = searchParams.get('page') ?? undefined;
+
+  const hrefForSlug = useCallback(
+    (target: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (target) {
+        next.set('page', target);
+      } else {
+        next.delete('page');
+      }
+      const search = next.toString();
+      return search ? `?${search}` : '?';
+    },
+    [searchParams],
+  );
+
   const [resolved, setResolved] = useState<ResolvedManifest>();
   const [error, setError] = useState<Error>();
-  const [slug, setSlug] = useState<string>();
   const [markdown, setMarkdown] = useState<string>();
   const [pageError, setPageError] = useState<Error>();
 
@@ -88,20 +114,6 @@ export function DocsBrowser({
       cancelled = true;
     };
   }, [api, bundleId, activeSlug, resolved]);
-
-  const hrefForSlug = useCallback((target: string) => `#${target}`, []);
-
-  // Nav entries are ordinary anchors rather than click handlers, so a reader
-  // can open a page in a new tab and deep links keep working on reload.
-  useEffect(() => {
-    const readHash = () => {
-      const value = window.location.hash.replace(/^#/, '');
-      setSlug(value ? decodeURIComponent(value) : undefined);
-    };
-    readHash();
-    window.addEventListener('hashchange', readHash);
-    return () => window.removeEventListener('hashchange', readHash);
-  }, []);
 
   if (error) {
     return <StateMessage title="Could not load documentation" error={error} />;

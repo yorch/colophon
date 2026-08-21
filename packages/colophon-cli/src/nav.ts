@@ -112,7 +112,15 @@ function compareNodes(a: TreeNode, b: TreeNode): number {
   }
   const titleA = a.page?.title ?? humanize(a.segment);
   const titleB = b.page?.title ?? humanize(b.segment);
-  return titleA.localeCompare(titleB);
+  // Codepoint order, NOT localeCompare's default. Nav order feeds the
+  // manifest identity that revisionId is the hash of, so a runner with a
+  // Swedish locale would otherwise sort "Ärger" last, mint a different
+  // revision for identical documentation, and defeat the idempotence the
+  // whole content-addressing scheme exists to provide.
+  if (titleA === titleB) {
+    return 0;
+  }
+  return titleA < titleB ? -1 : 1;
 }
 
 /** Every slug reachable from the nav, used to spot orphaned pages. */

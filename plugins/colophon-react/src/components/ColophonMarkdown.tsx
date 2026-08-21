@@ -1,3 +1,4 @@
+import { stripFrontmatter } from '@brnby/colophon-common';
 import type { ComponentProps, ReactNode } from 'react';
 import { Children, isValidElement, useEffect, useMemo } from 'react';
 import type { Components } from 'react-markdown';
@@ -32,6 +33,15 @@ export function ColophonMarkdown({
   className,
 }: ColophonMarkdownProps) {
   const overrides = useColophonComponents();
+
+  // Pages are stored whole, frontmatter included, so the renderer strips it
+  // for the same reason the publisher and the chunker do — and using the
+  // same shared function, so all three agree on where a body begins.
+  // Without this, remark reads the YAML block as a thematic break followed
+  // by a setext heading, and every page displays its own frontmatter as a
+  // second-level heading that rehype-slug then gives an id to, putting the
+  // rendered heading set out of step with the manifest the ToC is built from.
+  const body = useMemo(() => stripFrontmatter(content), [content]);
 
   useEffect(() => ensureColophonStyles(), []);
 
@@ -124,7 +134,7 @@ export function ColophonMarkdown({
         rehypePlugins={REHYPE_PLUGINS}
         components={components}
       >
-        {content}
+        {body}
       </Markdown>
     </div>
   );

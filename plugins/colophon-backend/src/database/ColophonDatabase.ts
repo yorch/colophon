@@ -465,17 +465,52 @@ export class ColophonDatabase {
     return [...byBundle.values()];
   }
 
-  /** Revision ids no channel points at — the only ones GC may remove. */
-  async findUnreferencedRevisions(
+  /**
+   * Deletes unreferenced revisions beyond the retention window, atomically.
+   *
+   * Selection and deletion share one transaction, and the delete re-checks
+   * the channel table rather than trusting the ids chosen a moment earlier.
+   * Splitting the two lets a concurrent setChannel point a channel at a
+   * revision already marked for collection, and since colophon_channels
+   * carries a foreign key to colophon_revisions with no ON DELETE, the delete
+   * then fails outright — aborting a publish whose work had already landed.
+   */
+  async collectUnreferencedRevisions(
     bundleId: string,
     keep: number,
   ): Promise<string[]> {
-    const revisions = await this.listRevisions(bundleId);
-    const pointed = new Set(
-      (await this.listChannels(bundleId)).map(c => c.revisionId),
-    );
-    const unpointed = revisions.filter(r => !pointed.has(r.revisionId));
-    return unpointed.slice(keep).map(r => r.revisionId);
+    return this.#knex.transaction(async trx => {
+      const rows = await trx('colophon_revisions as r')
+        .where('r.bundle_id', bundleId)
+        .whereNotExists(function pointedAt() {
+          this.select(trx.raw('1'))
+            .from('colophon_channels as ch')
+            .whereRaw('ch.revision_id = r.revision_id');
+        })
+        .orderBy('r.created_at', 'desc')
+        .select('r.revision_id');
+
+      const stale = rows.slice(keep).map(row => row.revision_id as string);
+      if (stale.length === 0) {
+        return [];
+      }
+
+      await trx('colophon_chunks').whereIn('revision_id', stale).delete();
+      await trx('colophon_pages').whereIn('revision_id', stale).delete();
+      // The same NOT EXISTS guard again: between the select above and here a
+      // channel could still have claimed one, and the transaction's read
+      // snapshot does not prevent that on every isolation level.
+      const deleted = await trx('colophon_revisions as r')
+        .whereIn('r.revision_id', stale)
+        .whereNotExists(function pointedAt() {
+          this.select(trx.raw('1'))
+            .from('colophon_channels as ch')
+            .whereRaw('ch.revision_id = r.revision_id');
+        })
+        .delete();
+
+      return deleted > 0 ? stale : [];
+    });
   }
 
   async deleteRevisions(revisionIds: string[]): Promise<void> {
@@ -583,10 +618,13 @@ export class ColophonDatabase {
   }
 
   async searchChunks(options: ChunkSearchOptions): Promise<ChunkSearchResult> {
+    // Punctuation SPLITS a term rather than being deleted from inside it.
+    // Deleting turned "creds:1" into "creds1", which matches nothing even
+    // though the literal string is in the corpus — precisely the
+    // identifier-shaped query a documentation search exists to serve.
     const terms = options.query
       .toLowerCase()
-      .split(/\s+/)
-      .map(term => term.replace(/[^\p{L}\p{N}._-]/gu, ''))
+      .split(/[^\p{L}\p{N}._-]+/u)
       .filter(term => term.length >= MIN_TERM_LENGTH);
     if (terms.length === 0) {
       return { hits: [], total: 0 };
