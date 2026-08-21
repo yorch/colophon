@@ -13,6 +13,7 @@ import {
 import express, { type Request } from 'express';
 import Router from 'express-promise-router';
 import { z } from 'zod';
+import type { DocsAuthorizer } from './authorize';
 import { type ColophonService, MAX_SEARCH_LIMIT } from './ColophonService';
 
 /** Query strings arrive as string, string[] or undefined — normalise once. */
@@ -80,15 +81,28 @@ function parse<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
 export async function createRouter(options: {
   colophon: ColophonService;
   httpAuth: HttpAuthService;
+  authorizer: DocsAuthorizer;
   logger: LoggerService;
   appBaseUrl: string;
 }): Promise<express.Router> {
-  const { colophon, httpAuth } = options;
+  const { colophon, httpAuth, authorizer } = options;
+
+  /**
+   * Authenticates, then authorises against the bundle being read.
+   *
+   * Every route that serves a specific bundle goes through this. The previous
+   * shape called httpAuth.credentials and DISCARDED the result, so the
+   * credentials were established and then never used to decide anything.
+   */
+  const authorizeBundle = async (req: Request, bundleId: string) => {
+    const credentials = await httpAuth.credentials(req);
+    await authorizer.assertCanRead(bundleId, credentials);
+  };
   const router = Router();
   router.use(express.json());
 
   router.get('/bundles', async (req, res) => {
-    await httpAuth.credentials(req);
+    const credentials = await httpAuth.credentials(req);
     const query = parse(listBundlesQuery, req.query);
     let bundleIds = query.bundleId;
     if (query.entityRef) {
@@ -109,12 +123,20 @@ export async function createRouter(options: {
       bundleIds,
       query: query.q,
     });
-    res.json({ bundles });
+    // Omitted rather than refused: a list must not fail because one entry is
+    // out of reach, and must not disclose that the entry exists either.
+    const readable = await authorizer.filterReadable(
+      bundles.map(bundle => bundle.bundleId),
+      credentials,
+    );
+    res.json({
+      bundles: bundles.filter(bundle => readable.has(bundle.bundleId)),
+    });
   });
 
   router.get('/bundles/:bundleId/channels', async (req, res) => {
-    await httpAuth.credentials(req);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    await authorizeBundle(req, bundleId);
     // Resolving first turns an unknown bundle into a 404 rather than an
     // empty list that looks like a bundle with no channels.
     await colophon.resolve(bundleId);
@@ -122,8 +144,8 @@ export async function createRouter(options: {
   });
 
   router.get('/bundles/:bundleId/manifest', async (req, res) => {
-    await httpAuth.credentials(req);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    await authorizeBundle(req, bundleId);
     const { channel } = parse(channelQuery, req.query);
     const resolved = await colophon.getManifest(bundleId, channel);
     res.json({
@@ -137,8 +159,8 @@ export async function createRouter(options: {
   });
 
   const readPage: express.RequestHandler = async (req, res) => {
-    await httpAuth.credentials(req);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    await authorizeBundle(req, bundleId);
     const { channel } = parse(channelQuery, req.query);
     const slug = normalizeSlug(wildcardParam(req) ?? '');
     const resolved = await colophon.getPage(bundleId, slug, channel);
@@ -154,8 +176,8 @@ export async function createRouter(options: {
   router.get('/bundles/:bundleId/pages/*', readPage);
 
   router.get('/bundles/:bundleId/assets/*', async (req, res) => {
-    await httpAuth.credentials(req);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    await authorizeBundle(req, bundleId);
     const { channel } = parse(channelQuery, req.query);
     const path = parse(z.string().min(1), wildcardParam(req));
     const asset = await colophon.getAsset(bundleId, path, channel);
@@ -165,7 +187,10 @@ export async function createRouter(options: {
   router.post('/bundles/:bundleId/revisions', async (req, res) => {
     // Publishing is a write, so an unauthenticated caller must not reach it
     // even if a deployment has relaxed the plugin-wide policy.
-    await httpAuth.credentials(req, { allow: ['user', 'service'] });
+    const credentials = await httpAuth.credentials(req, {
+      allow: ['user', 'service'],
+    });
+    await authorizer.assertCanPublish(credentials);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
     const body = parse(registerRevisionBody, req.body);
     const result = await colophon.registerRevision({ bundleId, ...body });
@@ -204,7 +229,7 @@ export async function createRouter(options: {
   });
 
   router.get('/search', async (req, res) => {
-    await httpAuth.credentials(req);
+    const credentials = await httpAuth.credentials(req);
     const query = parse(searchQuery, req.query);
     const { hits, total } = await colophon.search({
       query: query.q,
@@ -216,9 +241,16 @@ export async function createRouter(options: {
       limit: query.limit,
       offset: query.offset,
     });
+    const readable = await authorizer.filterReadable(
+      [...new Set(hits.map(hit => hit.bundleId))],
+      credentials,
+    );
+    const results = hits.filter(hit => readable.has(hit.bundleId));
     res.json({
-      results: hits,
-      total,
+      results,
+      // `total` counts what the caller may see, not what matched. Reporting
+      // the unfiltered count would tell them how much they are missing.
+      total: results.length === hits.length ? total : results.length,
       limit: query.limit,
       offset: query.offset,
     });

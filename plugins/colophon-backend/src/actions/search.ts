@@ -116,10 +116,10 @@ export function registerSearchAction(deps: ColophonActionDeps): void {
           note: z.string(),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
       const limit = input.limit ?? DEFAULT_LIMIT;
       const offset = input.offset ?? 0;
-      const { hits, total } = await deps.colophon.search({
+      const { hits: allHits, total: matched } = await deps.colophon.search({
         query: input.query,
         entityRefs: input.entityRefs,
         bundleIds: input.bundleIds,
@@ -129,6 +129,17 @@ export function registerSearchAction(deps: ColophonActionDeps): void {
         limit,
         offset,
       });
+      // Filtered rather than refused: a search must omit what the caller
+      // cannot see, not fail because one result is out of reach.
+      const readable = await deps.authorizer.filterReadable(
+        [...new Set(allHits.map(hit => hit.bundleId))],
+        credentials,
+      );
+      const hits = allHits.filter(hit => readable.has(hit.bundleId));
+      // Counts describe what this caller may see. Reporting the unfiltered
+      // total would tell an agent how much was withheld.
+      const total = hits.length === allHits.length ? matched : hits.length;
+
       const links = await deps.colophon.db.listEntityLinks({
         bundleIds: [...new Set(hits.map(hit => hit.bundleId))],
       });

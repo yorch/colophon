@@ -51,6 +51,7 @@ describeEachBackend('router', backend => {
       await createRouter({
         colophon: h.colophon,
         httpAuth: mockServices.httpAuth(),
+        authorizer: h.authorizer,
         logger: mockServices.logger.mock(),
         appBaseUrl: 'http://localhost:3000',
       }),

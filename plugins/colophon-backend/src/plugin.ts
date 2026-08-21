@@ -7,6 +7,7 @@ import { catalogServiceRef } from '@backstage/plugin-catalog-node';
 import { registerColophonActions } from './actions';
 import { syncEntityLinks } from './catalog/syncEntityLinks';
 import { readColophonConfig } from './config';
+import { createDocsAuthorizer } from './service/authorize';
 import { createColophonService } from './service/createColophonService';
 import { createRouter } from './service/router';
 
@@ -30,6 +31,7 @@ export const colophonPlugin = createBackendPlugin({
         scheduler: coreServices.scheduler,
         auth: coreServices.auth,
         actionsRegistry: actionsRegistryServiceRef,
+        permissions: coreServices.permissions,
         catalog: catalogServiceRef,
       },
       async init({
@@ -42,6 +44,7 @@ export const colophonPlugin = createBackendPlugin({
         auth,
         actionsRegistry,
         catalog,
+        permissions,
       }) {
         const { appBaseUrl, schedule } = readColophonConfig(config);
         const colophon = await createColophonService({
@@ -50,11 +53,31 @@ export const colophonPlugin = createBackendPlugin({
           logger,
         });
 
+        // One authorizer, shared by the HTTP routes and the MCP actions:
+        // they serve the same content to the same callers, and a difference
+        // between them is a way around whichever is stricter.
+        const authorizer = createDocsAuthorizer({
+          permissions,
+          catalog,
+          db: colophon.db,
+        });
+
         httpRouter.use(
-          await createRouter({ colophon, httpAuth, logger, appBaseUrl }),
+          await createRouter({
+            colophon,
+            httpAuth,
+            authorizer,
+            logger,
+            appBaseUrl,
+          }),
         );
 
-        registerColophonActions({ actionsRegistry, colophon, appBaseUrl });
+        registerColophonActions({
+          actionsRegistry,
+          colophon,
+          authorizer,
+          appBaseUrl,
+        });
 
         await scheduler.scheduleTask({
           id: 'colophon-sync-entity-links',

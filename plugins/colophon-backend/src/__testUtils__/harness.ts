@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { mockServices } from '@backstage/backend-test-utils';
+import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import {
   blobKey,
   type ChunkingOptions,
@@ -14,6 +15,10 @@ import {
 } from '@brnby/colophon-common';
 import type { Knex } from 'knex';
 import { ColophonDatabase } from '../database';
+import {
+  createDocsAuthorizer,
+  type DocsAuthorizer,
+} from '../service/authorize';
 import { ColophonService } from '../service/ColophonService';
 import type { BundleStorage } from '../storage';
 import { LocalBundleStorage } from '../storage/LocalBundleStorage';
@@ -51,6 +56,8 @@ export interface PublishSpec {
 
 export interface Harness {
   db: ColophonDatabase;
+  /** Allows everything unless a test narrows it; see createHarness. */
+  authorizer: DocsAuthorizer;
   storage: BundleStorage;
   colophon: ColophonService;
   bundleId: string;
@@ -73,6 +80,10 @@ export const DEFAULT_BUNDLE = 'example.com/repo';
  */
 export async function createHarness(options: {
   knex: Knex;
+  /** Entity refs the caller may see. Omit to allow every entity. */
+  visibleEntityRefs?: string[];
+  /** Denies colophon.docs.read outright, as a policy would. */
+  denyRead?: boolean;
   chunking?: ChunkingOptions;
   revisionsPerChannel?: number;
   bundleId?: string;
@@ -86,6 +97,31 @@ export async function createHarness(options: {
   const db = await ColophonDatabase.create({
     database: mockServices.database({ knex: options.knex }),
   });
+  // A permission service and catalog that behave like an unconfigured
+  // Backstage — allow everything — unless a test asks for less.
+  const authorizer = createDocsAuthorizer({
+    permissions: {
+      authorize: async (requests: unknown[]) =>
+        requests.map(() => ({
+          result: options.denyRead
+            ? AuthorizeResult.DENY
+            : AuthorizeResult.ALLOW,
+        })),
+      authorizeConditional: async (requests: unknown[]) =>
+        requests.map(() => ({ result: AuthorizeResult.ALLOW })),
+    } as never,
+    catalog: {
+      getEntitiesByRefs: async (request: { entityRefs: string[] }) => ({
+        items: request.entityRefs.map(ref =>
+          !options.visibleEntityRefs || options.visibleEntityRefs.includes(ref)
+            ? ({ kind: 'Component', metadata: { name: ref } } as never)
+            : undefined,
+        ),
+      }),
+    } as never,
+    db,
+  });
+
   const colophon = new ColophonService({
     db,
     storage,
@@ -172,6 +208,7 @@ export async function createHarness(options: {
 
   return {
     db,
+    authorizer,
     storage,
     colophon,
     bundleId,

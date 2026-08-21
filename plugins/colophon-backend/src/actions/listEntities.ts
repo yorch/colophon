@@ -62,12 +62,19 @@ export function registerListEntitiesAction(deps: ColophonActionDeps): void {
           note: z.string(),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
       const limit = input.limit ?? DEFAULT_LIMIT;
       const offset = input.offset ?? 0;
-      const all = await deps.colophon.db.listEntityLinks({
+      const links = await deps.colophon.db.listEntityLinks({
         bundleIds: input.bundleId ? [input.bundleId] : undefined,
       });
+      // Filter BEFORE paginating, or the page size would leak how many
+      // entries were withheld.
+      const readable = await deps.authorizer.filterReadable(
+        [...new Set(links.map(link => link.bundleId))],
+        credentials,
+      );
+      const all = links.filter(link => readable.has(link.bundleId));
       const page = all.slice(offset, offset + limit);
       const bundles = new Map(
         (

@@ -67,8 +67,12 @@ export function registerGetPageAction(deps: ColophonActionDeps): void {
           url: z.string().describe('Portal deep link — cite this.'),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
       const target = await resolveTarget(deps.colophon.db, input);
+      // Actions run as the CALLING USER, so this must apply the same
+      // check the HTTP route does — an agent must not reach documentation
+      // its operator cannot.
+      await deps.authorizer.assertCanRead(target.bundleId, credentials);
       const slug = normalizeSlug(input.slug);
       if (!inScope(target, slug)) {
         throw new NotFoundError(

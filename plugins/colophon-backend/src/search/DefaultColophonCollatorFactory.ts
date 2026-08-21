@@ -13,6 +13,7 @@ import {
   type DocType,
   isWithinSubpath,
 } from '@brnby/colophon-common';
+import { colophonDocsReadPermission } from '../permissions';
 import { pageUrl } from '../service/links';
 
 /** The document type Colophon contributes to the portal search index. */
@@ -75,6 +76,16 @@ const PAGE_SIZE = 200;
  */
 export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
   readonly type = COLOPHON_DOCUMENT_TYPE;
+
+  /**
+   * Declared so the `authorization.resourceRef` below actually does something.
+   *
+   * Backstage's AuthorizedSearchEngine filters a result set by authorizing
+   * this permission against each document's resourceRef. Without the
+   * declaration it has nothing to authorize, so the refs were being attached
+   * and ignored — search looked filtered and was not.
+   */
+  readonly visibilityPermission = colophonDocsReadPermission;
 
   readonly #discovery: DiscoveryService;
   readonly #auth: AuthService;

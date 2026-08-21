@@ -65,8 +65,12 @@ export function registerListPagesAction(deps: ColophonActionDeps): void {
           totalPages: z.number(),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
       const target = await resolveTarget(deps.colophon.db, input);
+      // Actions run as the CALLING USER, so this must apply the same
+      // check the HTTP route does — an agent must not reach documentation
+      // its operator cannot.
+      await deps.authorizer.assertCanRead(target.bundleId, credentials);
       const { channel, manifest } = await deps.colophon.getManifest(
         target.bundleId,
         input.channel,

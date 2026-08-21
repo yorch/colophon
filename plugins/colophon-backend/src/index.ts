@@ -14,6 +14,11 @@
 
 export type { ColophonConfig } from './config';
 export { readColophonConfig } from './config';
+export {
+  colophonDocsPublishPermission,
+  colophonDocsReadPermission,
+  colophonPermissions,
+} from './permissions';
 export { colophonPlugin as default } from './plugin';
 export type { ColophonDocument } from './search/DefaultColophonCollatorFactory';
 export {
@@ -21,6 +26,8 @@ export {
   DefaultColophonCollatorFactory,
 } from './search/DefaultColophonCollatorFactory';
 export { searchModuleColophonCollator } from './search/module';
+export type { DocsAuthorizer } from './service/authorize';
+export { createDocsAuthorizer } from './service/authorize';
 export type {
   ColophonServiceOptions,
   IngestResult,

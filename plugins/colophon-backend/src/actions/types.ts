@@ -1,9 +1,18 @@
 import type { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
+import type { DocsAuthorizer } from '../service/authorize';
 import type { ColophonService } from '../service/ColophonService';
 
 export interface ColophonActionDeps {
   actionsRegistry: ActionsRegistryService;
   colophon: ColophonService;
+  /**
+   * The same authorizer the HTTP routes use.
+   *
+   * Actions run with the CALLING USER's credentials, so an agent must not be
+   * able to reach documentation its operator cannot — which is exactly what
+   * happened while these actions only authenticated.
+   */
+  authorizer: DocsAuthorizer;
   appBaseUrl: string;
 }
 

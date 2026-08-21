@@ -69,6 +69,7 @@ async function setup() {
   registerColophonActions({
     actionsRegistry: actionsRegistry as never,
     colophon: harness.colophon,
+    authorizer: harness.authorizer,
     appBaseUrl: APP_URL,
   });
 

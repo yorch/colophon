@@ -90,3 +90,53 @@ mcpActions:
         include:
           - id: 'colophon:*'
 ```
+
+## Permissions
+
+Colophon defines two permissions and enforces them across the HTTP routes,
+the MCP actions, and portal search alike — so a rule written once holds
+everywhere rather than covering only whichever surface you tested.
+
+| Permission | Guards |
+| --- | --- |
+| `colophon.docs.read` | Reading documentation, anywhere |
+| `colophon.docs.publish` | Registering a revision and repointing a channel |
+
+### The default
+
+With no permission policy installed, Backstage allows everything, so
+documentation is readable by every authenticated user. That is the same
+default TechDocs has, and it is almost certainly what you want on day one.
+
+### Following catalog visibility
+
+Per-entity visibility is delegated to the catalog rather than re-decided
+here. When a bundle is linked to a catalog entity, the backend asks the
+catalog — with the caller's own credentials — whether that entity is
+visible. If it is not, the documentation is reported as not found.
+
+This means "documentation is as visible as the component it documents" is
+already true, without a policy of your own, and it cannot drift from what
+the catalog itself would answer.
+
+A bundle that no entity references has nothing to delegate to, and is
+governed by `colophon.docs.read` alone. Denying those by default would make
+the plugin appear broken whenever documentation is published before its
+catalog entry lands.
+
+### Restricting further
+
+```ts
+if (isPermission(request.permission, colophonDocsReadPermission)) {
+  return { result: AuthorizeResult.DENY };
+}
+```
+
+To keep publishing to CI alone, deny `colophon.docs.publish` for user
+principals and grant it to the service identity your pipeline uses.
+
+### Why a hidden bundle reports "not found"
+
+Distinguishing "exists but you may not see it" from "does not exist" would
+tell an unauthorised caller which bundle ids are real — and a bundle id is a
+repository name.
