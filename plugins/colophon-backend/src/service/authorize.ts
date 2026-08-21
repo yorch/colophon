@@ -74,6 +74,16 @@ export function createDocsAuthorizer(options: {
         return;
       }
 
+      // This is the load-bearing call, so what it does is worth stating.
+      // The catalog's AuthorizedEntitiesCatalog wraps the batch read and
+      // returns NULL in place of any entity the caller may not read, keeping
+      // the array positional. So a null here means "you cannot see this",
+      // not "this does not exist" — and both should hide the docs anyway.
+      //
+      // Note this filters only when the permission framework is enabled. With
+      // it disabled, which is the Backstage default, every entity comes back
+      // and documentation stays readable by every authenticated user. That is
+      // the documented default rather than a gap.
       const { items } = await options.catalog.getEntitiesByRefs(
         { entityRefs: links.map(link => link.entityRef) },
         { credentials },
