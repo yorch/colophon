@@ -2,6 +2,7 @@ import { useApi } from '@backstage/core-plugin-api';
 import { Box, Flex, Text } from '@backstage/ui';
 import type { NavNode } from '@brnby/colophon-common';
 import {
+  ColophonComponentsProvider,
   ColophonMarkdown,
   ColophonNav,
   ColophonPageHeader,
@@ -13,6 +14,7 @@ import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
 import { ChannelPicker } from './ChannelPicker';
+import { useMarkdownComponents } from './markdownComponents';
 import { StateMessage } from './StateMessage';
 
 export interface DocsBrowserProps {
@@ -124,6 +126,13 @@ export function DocsBrowser({
     };
   }, [api, bundleId, activeSlug, resolved]);
 
+  const components = useMarkdownComponents({
+    bundleId,
+    fromPath: page?.path ?? 'index.md',
+    channel: resolved?.channel,
+    hrefForSlug,
+  });
+
   if (error) {
     return <StateMessage title="Could not load documentation" error={error} />;
   }
@@ -174,7 +183,13 @@ export function DocsBrowser({
           <StateMessage title="Could not load this page" error={pageError} />
         )}
         {markdown === undefined && !pageError && <Text>Loading…</Text>}
-        {markdown !== undefined && <ColophonMarkdown content={markdown} />}
+        {markdown !== undefined && (
+          // Relative links and images resolve against the page they were
+          // written on, which the renderer cannot know on its own.
+          <ColophonComponentsProvider components={components}>
+            <ColophonMarkdown content={markdown} />
+          </ColophonComponentsProvider>
+        )}
       </Box>
 
       {page && page.headings.length > 0 && (

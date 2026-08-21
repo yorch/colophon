@@ -1,5 +1,8 @@
-import { posix } from 'node:path';
-import { type NavNode, slugFromPath } from '@brnby/colophon-common';
+import {
+  type NavNode,
+  resolveReference,
+  slugFromPath,
+} from '@brnby/colophon-common';
 import { reachableSlugs } from './nav';
 import type { AssetDraft, Diagnostic, PageDraft } from './types';
 
@@ -140,26 +143,35 @@ function checkReferences(
 
   for (const page of pages) {
     for (const reference of page.references) {
-      if (isExternal(reference.url)) {
+      // Resolution comes from the contract, so the link this blesses is the
+      // one the renderer will follow. Deciding it here independently is how
+      // a publish can succeed while every link 404s in the portal.
+      const resolved = resolveReference(page.path, reference.url);
+
+      if (resolved.kind === 'external') {
         continue;
       }
-      const [target, fragment] = splitFragment(reference.url);
 
-      // A bare fragment points within the current page.
-      if (!target) {
-        if (fragment && !anchorsBySlug.get(page.slug)?.has(fragment)) {
+      if (resolved.kind === 'anchor') {
+        if (
+          resolved.anchor &&
+          !anchorsBySlug.get(page.slug)?.has(resolved.anchor)
+        ) {
           diagnostics.push({
             level: 'error',
-            message: `link to "#${fragment}" does not match any heading on this page`,
+            message: `link to "#${resolved.anchor}" does not match any heading on this page`,
             path: page.path,
           });
         }
         continue;
       }
 
-      const resolved = resolveRelative(page.path, target);
-      if (reference.kind === 'image' || !/\.mdx?$/i.test(target)) {
-        if (!assetPaths.has(resolved) && !slugs.has(slugFromPath(resolved))) {
+      if (resolved.kind === 'asset') {
+        // A link written without an extension may still mean a page.
+        if (
+          !assetPaths.has(resolved.path) &&
+          !slugs.has(slugFromPath(resolved.path))
+        ) {
           diagnostics.push({
             level: 'error',
             message: `references "${reference.url}", which is not a file in this bundle`,
@@ -169,8 +181,7 @@ function checkReferences(
         continue;
       }
 
-      const targetSlug = slugFromPath(resolved);
-      if (!slugs.has(targetSlug)) {
+      if (!slugs.has(resolved.slug)) {
         diagnostics.push({
           level: 'error',
           message: `links to "${reference.url}", which is not a page in this bundle`,
@@ -178,10 +189,13 @@ function checkReferences(
         });
         continue;
       }
-      if (fragment && !anchorsBySlug.get(targetSlug)?.has(fragment)) {
+      if (
+        resolved.anchor &&
+        !anchorsBySlug.get(resolved.slug)?.has(resolved.anchor)
+      ) {
         diagnostics.push({
           level: 'error',
-          message: `links to "${reference.url}", but that page has no heading "#${fragment}"`,
+          message: `links to "${reference.url}", but that page has no heading "#${resolved.anchor}"`,
           path: page.path,
         });
       }
@@ -189,38 +203,6 @@ function checkReferences(
   }
 
   return diagnostics;
-}
-
-function isExternal(url: string): boolean {
-  return /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//');
-}
-
-function splitFragment(url: string): [string, string | undefined] {
-  const index = url.indexOf('#');
-  const target = index === -1 ? url : url.slice(0, index);
-  const fragment = index === -1 ? undefined : url.slice(index + 1);
-  // The target is decoded as well as the fragment. Percent-encoding is the
-  // ordinary way to link a filename containing a space, and comparing the
-  // raw "my%20guide.md" against a real "my guide.md" reported a broken link
-  // and failed the publish.
-  return [decodeSafely(target), fragment && decodeSafely(fragment)];
-}
-
-/** Malformed escapes are left as-is rather than throwing URIError. */
-function decodeSafely(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-/** Resolves a link relative to the linking page, staying inside the bundle. */
-function resolveRelative(fromPath: string, target: string): string {
-  if (target.startsWith('/')) {
-    return target.replace(/^\/+/, '');
-  }
-  return posix.normalize(posix.join(posix.dirname(fromPath), target));
 }
 
 export function hasErrors(diagnostics: Diagnostic[]): boolean {

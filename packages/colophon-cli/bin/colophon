@@ -1,15 +1,38 @@
 #!/usr/bin/env node
 /*
- * Resolves the built CLI, falling back to the TypeScript source so the binary
- * also works from a source checkout during development.
+ * Runs the built CLI.
+ *
+ * Two things must be true for this to work from a source checkout: the CLI
+ * must be built, AND @brnby/colophon-common must be in its published form.
+ * In development that package's `main` points at src/index.ts so editors and
+ * tests resolve straight to source, which means the built CLI would load
+ * TypeScript it cannot execute. `backstage-cli package prepack` swaps `main`
+ * to dist, and a published install gets that shape from publishConfig
+ * already — so this only ever bites in a local checkout.
+ *
+ * Both failures used to surface as a bare module-resolution stack trace that
+ * said nothing about the cause.
  */
+const RESOLUTION_FAILURES = ['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'];
+
 let main;
 try {
   ({ main } = require('../dist/index.cjs.js'));
 } catch (error) {
-  if (error.code !== 'MODULE_NOT_FOUND') throw error;
-  require('@backstage/cli/config/nodeTransform.cjs');
-  ({ main } = require('../src/index.ts'));
+  if (!RESOLUTION_FAILURES.includes(error.code)) throw error;
+  console.error(
+    'colophon: this checkout is not ready to run.\n\n' +
+      'From the repository root:\n' +
+      '  yarn tsc\n' +
+      '  yarn workspace @brnby/colophon-common run build\n' +
+      '  yarn workspace @brnby/colophon-cli run build\n' +
+      '  yarn workspace @brnby/colophon-common run prepack\n' +
+      '  yarn workspace @brnby/colophon-cli run prepack\n\n' +
+      'The prepack steps point each package at its build output; run the\n' +
+      'matching postpack afterwards to restore the source entrypoints.\n\n' +
+      `Underlying error: ${error.message}`,
+  );
+  process.exit(1);
 }
 
 main(process.argv.slice(2)).then(

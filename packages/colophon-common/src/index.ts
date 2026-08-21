@@ -11,4 +11,5 @@ export * from './config';
 export * from './frontmatter';
 export * from './ids';
 export * from './manifest';
+export * from './references';
 export * from './storage';
