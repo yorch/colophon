@@ -646,6 +646,14 @@ export class ColophonDatabase {
       });
     }
 
+    // Known asymmetry, and deliberate: Postgres runs a real full-text query,
+    // so it stems and drops stopwords — "the and" reduces to an empty tsquery
+    // and matches nothing. The SQLite path is substring scoring with no
+    // linguistic knowledge, so the same query matches any chunk containing
+    // "the". Postgres has the better behaviour; SQLite is the dev and test
+    // fallback and reimplementing a stemmer there would cost more than it is
+    // worth. Tests that must hold on both live in ColophonDatabase.test.ts,
+    // which runs against every configured backend for exactly this reason.
     const score = this.isPostgres
       ? this.#knex.raw(
           `ts_rank(c.search_vector, plainto_tsquery('english', ?))`,
