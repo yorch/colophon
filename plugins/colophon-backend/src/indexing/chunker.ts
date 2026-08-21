@@ -33,6 +33,13 @@ interface Section {
   heading?: string;
   anchor?: string;
   breadcrumb: string[];
+  /**
+   * Content folded in from EARLIER sections that were too short to stand
+   * alone. Kept apart from `blocks` so that the section's own heading can be
+   * re-inserted in front of its OWN blocks rather than in front of everything
+   * merged into it — which emits the page out of order.
+   */
+  carried: string[];
   blocks: string[];
 }
 
@@ -50,11 +57,16 @@ function stripFrontmatter(markdown: string): string {
   return markdown.replace(FRONTMATTER, '');
 }
 
-function sectionText(section: Section): string {
-  return section.blocks.join('\n\n').trim();
+/** Everything the section will emit, in document order. */
+function allBlocks(section: Section): string[] {
+  return [...section.carried, ...section.blocks];
 }
 
-/** Blocks with the section's own heading restored as literal markdown. */
+function sectionText(section: Section): string {
+  return allBlocks(section).join('\n\n').trim();
+}
+
+/** A section's OWN blocks with its OWN heading restored as literal markdown. */
 function blocksWithHeading(section: Section): string[] {
   if (!section.heading || section.depth === undefined) {
     return section.blocks;
@@ -76,8 +88,8 @@ function mergeForward(short: Section, next: Section): Section {
     short.depth !== undefined &&
     next.depth !== undefined &&
     next.depth > short.depth;
-  const carried = nested ? short.blocks : blocksWithHeading(short);
-  return { ...next, blocks: [...carried, ...next.blocks] };
+  const own = nested ? short.blocks : blocksWithHeading(short);
+  return { ...next, carried: [...short.carried, ...own] };
 }
 
 /**
@@ -146,7 +158,11 @@ export function chunkPage(
   const slugger = new GithubSlugger();
   const ancestors: Array<{ depth: number; text: string }> = [];
   const sections: Section[] = [];
-  let current: Section = { breadcrumb: [input.title], blocks: [] };
+  let current: Section = {
+    breadcrumb: [input.title],
+    carried: [],
+    blocks: [],
+  };
 
   for (const node of root.children) {
     if (node.type === 'heading') {
@@ -175,6 +191,7 @@ export function chunkPage(
           heading: isPageTitle ? undefined : text,
           anchor: isPageTitle ? undefined : anchor,
           breadcrumb: [input.title, ...ancestors.map(a => a.text)],
+          carried: [],
           blocks: [],
         };
         continue;
@@ -204,7 +221,7 @@ export function chunkPage(
     // Nothing follows a trailing short section, so it merges backwards rather
     // than being dropped or left as a chunk too small to retrieve well.
     if (last) {
-      last.blocks.push(...blocksWithHeading(pending));
+      last.blocks.push(...pending.carried, ...blocksWithHeading(pending));
     } else {
       kept.push(pending);
     }
@@ -215,7 +232,7 @@ export function chunkPage(
   // already-overlapped form, so the repetition does not compound down a page.
   let previous = '';
   for (const section of kept) {
-    for (const group of packBlocks(section.blocks, maxChars)) {
+    for (const group of packBlocks(allBlocks(section), maxChars)) {
       const text = group.join('\n\n').trim();
       if (!text) {
         continue;

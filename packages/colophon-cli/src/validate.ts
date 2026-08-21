@@ -25,6 +25,7 @@ export function validate(options: ValidateOptions): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
   diagnostics.push(...checkDuplicateSlugs(pages));
+  diagnostics.push(...checkTitles(pages));
   diagnostics.push(...checkRoot(pages));
   diagnostics.push(...checkReferences(pages, assets));
   diagnostics.push(...checkDescriptions(pages, strict));
@@ -55,6 +56,22 @@ function checkDuplicateSlugs(pages: PageDraft[]): Diagnostic[] {
       message: `${group
         .map(p => p.path)
         .join(' and ')} both resolve to the slug "${slug}"`,
+    }));
+}
+
+/**
+ * The title fallback chain (frontmatter -> first H1 -> humanized filename)
+ * only fails for a degenerate filename like `---.md`, which humanizes to
+ * the empty string — narrow, but `parseManifest` would otherwise reject it
+ * deep inside `build()` with a much less actionable message.
+ */
+function checkTitles(pages: PageDraft[]): Diagnostic[] {
+  return pages
+    .filter(page => !page.title.trim())
+    .map(page => ({
+      level: 'error' as const,
+      message: 'Missing title',
+      path: page.path,
     }));
 }
 

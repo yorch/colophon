@@ -184,6 +184,68 @@ describe('anchors', () => {
     );
     expect(chunks.map(c => c.anchor)).toEqual(['setup', 'setup-1']);
   });
+
+  it('consumes a slug for a non-splitting heading, so suffixes still line up', () => {
+    // H4 does not start a chunk, but it still takes "detail"; the H2 that
+    // repeats it must therefore be "detail-1" — exactly what the manifest's
+    // heading anchors, produced by the same slugger, will say.
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## Top\n\n${body('a')}\n\n#### Detail\n\n${body(
+          'b',
+        )}\n\n## Detail\n\n${body('c')}`,
+      },
+      opts(),
+    );
+    expect(chunks.map(c => c.anchor)).toEqual(['top', 'detail-1']);
+  });
+});
+
+describe('nesting', () => {
+  it('leaves headings deeper than the split depths inside the chunk body', () => {
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## Two\n\n${body('a')}\n\n#### Four\n\n${body(
+          'b',
+        )}\n\n##### Five\n\n${body('c')}`,
+      },
+      opts(),
+    );
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].anchor).toBe('two');
+    expect(chunks[0].text).toContain('#### Four');
+    expect(chunks[0].text).toContain('##### Five');
+  });
+
+  it('treats a depth above the shallowest split depth as a split too', () => {
+    // Splitting on h3 alone must not glue an entire h2 section onto the
+    // preceding one; anything shallower than the shallowest split depth
+    // starts a chunk as well.
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('a')}\n\n### A1\n\n${body(
+          'b',
+        )}\n\n## B\n\n${body('c')}`,
+      },
+      opts({ splitDepths: [3] }),
+    );
+    expect(chunks.map(c => c.anchor)).toEqual(['a', 'a1', 'b']);
+  });
+
+  it('emits the whole page as one chunk when no depth splits', () => {
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('a')}\n\n## B\n\n${body('b')}`,
+      },
+      opts({ splitDepths: [], maxChars: 100_000 }),
+    );
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].anchor).toBeUndefined();
+  });
 });
 
 describe('size rules', () => {
@@ -195,6 +257,37 @@ describe('size rules', () => {
     for (const chunk of chunks) {
       expect(chunk.text).not.toMatch(/word wor$/);
     }
+  });
+
+  it('cuts only between paragraphs, never inside one', () => {
+    // Every paragraph is a distinct sentence, so any chunk that ends
+    // mid-sentence proves the splitter cut through a block.
+    const paragraphs = Array.from(
+      { length: 6 },
+      (_unused, index) => `${`Sentence ${index} `.repeat(30).trim()}.`,
+    );
+    const chunks = chunkPage(
+      { title: 'P', markdown: `## Long\n\n${paragraphs.join('\n\n')}` },
+      opts({ maxChars: 600 }),
+    );
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.text.endsWith('.')).toBe(true);
+    }
+    // Nothing may be lost or duplicated in the process.
+    expect(chunks.flatMap(c => c.text.split('\n\n'))).toEqual(paragraphs);
+  });
+
+  it('emits a single paragraph over the ceiling whole rather than slicing it', () => {
+    // The ceiling is soft by contract: an oversized chunk retrieves worse
+    // than a small one, but a chunk cut mid-sentence retrieves wrongly.
+    const paragraph = 'word '.repeat(600).trim();
+    const chunks = chunkPage(
+      { title: 'P', markdown: `## Long\n\n${paragraph}` },
+      opts({ maxChars: 500 }),
+    );
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].text).toBe(paragraph);
   });
 
   it('merges a stub section into the one that follows', () => {
@@ -212,6 +305,132 @@ describe('size rules', () => {
       opts(),
     );
     expect(chunks[0].anchor).toBe('real');
+  });
+
+  it('re-inserts a merged stub heading, so its wording is still searchable', () => {
+    const chunks = chunkPage(
+      { title: 'P', markdown: `## Stub\n\nShort.\n\n## Real\n\n${body('a')}` },
+      opts(),
+    );
+    expect(chunks[0].text).toContain('## Stub');
+  });
+
+  it('omits the stub heading when the next section nests beneath it', () => {
+    // The breadcrumb of the nested section already names the parent, so
+    // repeating it in the body is noise an agent has to read past.
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## Parent\n\nShort.\n\n### Child\n\n${body('a')}`,
+      },
+      opts(),
+    );
+    expect(chunks[0].breadcrumb).toEqual(['P', 'Parent', 'Child']);
+    expect(chunks[0].text).not.toContain('## Parent');
+    expect(chunks[0].text).toContain('Short.');
+  });
+
+  it('emits merged content in document order, however many stubs run together', () => {
+    // Regression: chained merges used to re-insert each stub's heading in
+    // front of everything already carried, so a page of short sections came
+    // back with its headings reversed and detached from their own prose.
+    const markdown = [
+      '## Operations',
+      '',
+      'Operations intro.',
+      '',
+      '### Rotating credentials',
+      '',
+      'Rotate like so.',
+      '',
+      '### Revoking credentials',
+      '',
+      'Revoke like so.',
+      '',
+      '## Limits',
+      '',
+      'Some limits.',
+    ].join('\n');
+
+    const chunks = chunkPage({ title: 'P', markdown }, opts());
+    expect(chunks).toHaveLength(1);
+    // "Limits" is the surviving identity, so it is named by the breadcrumb
+    // rather than repeated in the body; every heading merged INTO it is.
+    expect(chunks[0].breadcrumb).toEqual(['P', 'Limits']);
+    expect(chunks[0].text.split('\n\n')).toEqual([
+      'Operations intro.',
+      '### Rotating credentials',
+      'Rotate like so.',
+      '### Revoking credentials',
+      'Revoke like so.',
+      'Some limits.',
+    ]);
+  });
+
+  it('appends a trailing stub after the chunk it merges back into', () => {
+    // Nothing follows it, so it merges backwards — but it must land at the
+    // END of that chunk, not in front of the content already there.
+    const chunks = chunkPage(
+      { title: 'P', markdown: `## Real\n\n${body('a')}\n\n## Tail\n\nBye.` },
+      opts(),
+    );
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].text).toMatch(/## Tail\n\nBye\.$/);
+    expect(chunks[0].text.indexOf('a a a')).toBeLessThan(
+      chunks[0].text.indexOf('## Tail'),
+    );
+  });
+});
+
+describe('overlap', () => {
+  it('repeats the tail of the previous chunk when asked to', () => {
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
+      },
+      opts({ overlapChars: 40 }),
+    );
+    expect(chunks[1].text.startsWith('beta')).toBe(false);
+    expect(chunks[1].text).toContain('alpha');
+  });
+
+  it('starts the overlap at a word boundary rather than mid-word', () => {
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
+      },
+      opts({ overlapChars: 40 }),
+    );
+    expect(chunks[1].text).toMatch(/^alpha/);
+  });
+
+  it('does not compound overlap down a long page', () => {
+    // Overlap is taken from the previous chunk's own text, so chunk three
+    // must carry a tail of chunk two only — never chunk one's as well.
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body(
+          'beta',
+        )}\n\n## C\n\n${body('gamma')}`,
+      },
+      opts({ overlapChars: 40 }),
+    );
+    expect(chunks[2].text).toContain('beta');
+    expect(chunks[2].text).not.toContain('alpha');
+  });
+
+  it('leaves the first chunk untouched, there being nothing before it', () => {
+    const chunks = chunkPage(
+      {
+        title: 'P',
+        markdown: `## A\n\n${body('alpha')}\n\n## B\n\n${body('beta')}`,
+      },
+      opts({ overlapChars: 40 }),
+    );
+    expect(chunks[0].text).toBe(body('alpha'));
   });
 });
 

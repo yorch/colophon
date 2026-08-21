@@ -1,12 +1,32 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { Box, Flex, Link, SearchField, Text } from '@backstage/ui';
 import { useEffect, useMemo, useState } from 'react';
+import { Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { BundleSummary } from '../api';
 import { colophonApiRef } from '../api';
+import { DocsBrowser } from './DocsBrowser';
 import { StateMessage } from './StateMessage';
 
-/** Browses every published bundle. */
+/**
+ * The docs home page: browse every published bundle, or read one.
+ *
+ * Routed as `/colophon/*` because a bundle id is itself slash-separated
+ * (`github.com/org/repo`) — there is no fixed number of path segments to
+ * declare ahead of it, so the whole remainder becomes the bundle id and the
+ * channel travels as a query param instead of a positional segment, which
+ * would be ambiguous with the tail of the id.
+ */
 export function DocsHomePage() {
+  return (
+    <Routes>
+      <Route path="/" element={<BundleList />} />
+      <Route path="/*" element={<BundleRoute />} />
+    </Routes>
+  );
+}
+
+/** Browses every published bundle. */
+function BundleList() {
   const api = useApi(colophonApiRef);
   const [bundles, setBundles] = useState<BundleSummary[]>();
   const [error, setError] = useState<Error>();
@@ -76,6 +96,35 @@ export function DocsHomePage() {
           <Text>No documentation matches “{filter}”.</Text>
         )}
       </Flex>
+    </Box>
+  );
+}
+
+/** Reads one bundle, resolved from the rest of the URL path. */
+function BundleRoute() {
+  const params = useParams();
+  // The `*` param is already segment-decoded by react-router; a bundle id's
+  // charset needs no further decoding.
+  const bundleId = params['*'] ?? '';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channel = searchParams.get('channel') ?? undefined;
+
+  return (
+    <Box>
+      <Link href="/colophon">← All documentation</Link>
+      <Box style={{ marginTop: '1rem' }}>
+        <DocsBrowser
+          bundleId={bundleId}
+          channel={channel}
+          onChannelChange={next =>
+            setSearchParams(prev => {
+              const updated = new URLSearchParams(prev);
+              updated.set('channel', next);
+              return updated;
+            })
+          }
+        />
+      </Box>
     </Box>
   );
 }

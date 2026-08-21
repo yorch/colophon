@@ -45,7 +45,9 @@ const colophonEntityContent = EntityContentBlueprint.make({
 const colophonPage = PageBlueprint.make({
   name: 'colophon',
   params: {
-    path: '/colophon',
+    // Trailing wildcard: the page itself routes `/colophon/<bundleId>`,
+    // where `<bundleId>` is a slash-separated path of its own.
+    path: '/colophon/*',
     title: 'Docs',
     loader: () =>
       import('./components/DocsHomePage').then(m => <m.DocsHomePage />),
