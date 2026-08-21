@@ -162,6 +162,7 @@ function checkReferences(
             level: 'error',
             message: `link to "#${resolved.anchor}" does not match any heading on this page`,
             path: page.path,
+            line: reference.line,
           });
         }
         continue;
@@ -177,6 +178,7 @@ function checkReferences(
             level: 'error',
             message: `references "${reference.url}", which is not a file in this bundle`,
             path: page.path,
+            line: reference.line,
           });
         }
         continue;
@@ -187,6 +189,7 @@ function checkReferences(
           level: 'error',
           message: `links to "${reference.url}", which is not a page in this bundle`,
           path: page.path,
+          line: reference.line,
         });
         continue;
       }
@@ -198,6 +201,7 @@ function checkReferences(
           level: 'error',
           message: `links to "${reference.url}", but that page has no heading "#${resolved.anchor}"`,
           path: page.path,
+          line: reference.line,
         });
       }
     }

@@ -46,7 +46,7 @@ export const colophonPlugin = createBackendPlugin({
         catalog,
         permissions,
       }) {
-        const { appBaseUrl, schedule } = readColophonConfig(config);
+        const { appBaseUrl, entityLinkSchedule } = readColophonConfig(config);
         const colophon = await createColophonService({
           config,
           database,
@@ -81,7 +81,7 @@ export const colophonPlugin = createBackendPlugin({
 
         await scheduler.scheduleTask({
           id: 'colophon-sync-entity-links',
-          ...schedule,
+          ...entityLinkSchedule,
           fn: async () => {
             await syncEntityLinks({ catalog, auth, db: colophon.db, logger });
           },

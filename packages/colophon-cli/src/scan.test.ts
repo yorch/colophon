@@ -98,3 +98,29 @@ describe('scan', () => {
     expect(result.pages[0].title).toBe('Title');
   });
 });
+
+describe('diagnostic line numbers', () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      made.splice(0).map(path => rm(path, { recursive: true, force: true })),
+    );
+  });
+
+  it('counts lines in the file, not in the frontmatter-stripped body', async () => {
+    // The parser only ever sees the body, so an unoffset position is short by
+    // the length of the frontmatter — and a wrong line number is worse than
+    // no line number.
+    await mkdir(TMP_ROOT, { recursive: true });
+    const dir = await mkdtemp(join(TMP_ROOT, 'lines-'));
+    made.push(dir);
+    await writeFile(
+      join(dir, 'index.md'),
+      '---\ntitle: Home\ndescription: d\n---\n\n# Home\n\n[link](./x.md)\n',
+    );
+
+    const [page] = (await scan(dir)).pages;
+    // The link is on line 8 of the file; the body alone would say 4.
+    expect(page.references[0].line).toBe(8);
+  });
+});

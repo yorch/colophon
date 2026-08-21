@@ -27,8 +27,19 @@ colophon:
     minChars: 200
 
   schedule:
-    frequency: { minutes: 10 }
-    timeout: { minutes: 15 }
+    # Re-reads the catalog for brnby.io/colophon annotations. Cheap — one
+    # filtered query — and worth running often, because until it does a newly
+    # annotated entity has no documentation tab.
+    entityLinks:
+      frequency: { minutes: 10 }
+      timeout: { minutes: 5 }
+      initialDelay: { seconds: 15 }
+    # Projects documentation into Backstage Search. Expensive: it pages the
+    # whole corpus over HTTP, so it wants to run far less often.
+    searchIndex:
+      frequency: { minutes: 60 }
+      timeout: { minutes: 30 }
+      initialDelay: { seconds: 60 }
 
 # Expose Colophon's actions to AI agents through the MCP Actions Backend.
 backend:

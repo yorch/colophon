@@ -1,4 +1,5 @@
 import type { RootConfigService } from '@backstage/backend-plugin-api';
+import type { Config } from '@backstage/config';
 import {
   type ChunkingOptions,
   chunkingOptionsSchema,
@@ -18,26 +19,51 @@ export interface ColophonConfig {
   };
   /** Base URL of the portal, used to build citable deep links. */
   appBaseUrl: string;
-  /** How often published revisions are ingested and re-indexed. */
-  schedule: {
-    frequency: { minutes: number };
-    timeout: { minutes: number };
-    initialDelay: { seconds: number };
-  };
+  /**
+   * How often the catalog is re-read for `brnby.io/colophon` annotations.
+   *
+   * Cheap: one filtered catalog query and a small table rewrite. It wants to
+   * be frequent, because until it runs a newly annotated entity has no
+   * documentation tab.
+   */
+  entityLinkSchedule: TaskSchedule;
+  /**
+   * How often documentation is projected into Backstage Search.
+   *
+   * Expensive: it pages the entire corpus over HTTP. It wants to be far less
+   * frequent than the link sync.
+   *
+   * These were one key until it became clear that a value suiting either one
+   * badly misfits the other, and that the key's own comment described a third
+   * thing — ingestion — which is synchronous inside setChannel and not
+   * scheduled at all.
+   */
+  searchIndexSchedule: TaskSchedule;
 }
 
-export const DEFAULT_SCHEDULE = {
+export interface TaskSchedule {
+  frequency: { minutes: number };
+  timeout: { minutes: number };
+  initialDelay: { seconds: number };
+}
+
+export const DEFAULT_ENTITY_LINK_SCHEDULE: TaskSchedule = {
   frequency: { minutes: 10 },
-  timeout: { minutes: 15 },
-  initialDelay: { seconds: 30 },
-} as const;
+  timeout: { minutes: 5 },
+  initialDelay: { seconds: 15 },
+};
+
+export const DEFAULT_SEARCH_INDEX_SCHEDULE: TaskSchedule = {
+  frequency: { minutes: 60 },
+  timeout: { minutes: 30 },
+  initialDelay: { seconds: 60 },
+};
 
 export const DEFAULT_REVISIONS_PER_CHANNEL = 10;
 
 export function readColophonConfig(config: RootConfigService): ColophonConfig {
   const root = config.getOptionalConfig('colophon');
   const chunking = root?.getOptionalConfig('chunking');
-  const schedule = root?.getOptionalConfig('schedule');
   return {
     chunking: chunkingOptionsSchema.parse({
       // Config has no number-array accessor, so read the raw value and let
@@ -53,22 +79,36 @@ export function readColophonConfig(config: RootConfigService): ColophonConfig {
         DEFAULT_REVISIONS_PER_CHANNEL,
     },
     appBaseUrl: config.getString('app.baseUrl'),
-    schedule: {
-      frequency: {
-        minutes:
-          schedule?.getOptionalNumber('frequency.minutes') ??
-          DEFAULT_SCHEDULE.frequency.minutes,
-      },
-      timeout: {
-        minutes:
-          schedule?.getOptionalNumber('timeout.minutes') ??
-          DEFAULT_SCHEDULE.timeout.minutes,
-      },
-      initialDelay: {
-        seconds:
-          schedule?.getOptionalNumber('initialDelay.seconds') ??
-          DEFAULT_SCHEDULE.initialDelay.seconds,
-      },
+    entityLinkSchedule: readSchedule(
+      root?.getOptionalConfig('schedule.entityLinks'),
+      DEFAULT_ENTITY_LINK_SCHEDULE,
+    ),
+    searchIndexSchedule: readSchedule(
+      root?.getOptionalConfig('schedule.searchIndex'),
+      DEFAULT_SEARCH_INDEX_SCHEDULE,
+    ),
+  };
+}
+
+function readSchedule(
+  config: Config | undefined,
+  fallback: TaskSchedule,
+): TaskSchedule {
+  return {
+    frequency: {
+      minutes:
+        config?.getOptionalNumber('frequency.minutes') ??
+        fallback.frequency.minutes,
+    },
+    timeout: {
+      minutes:
+        config?.getOptionalNumber('timeout.minutes') ??
+        fallback.timeout.minutes,
+    },
+    initialDelay: {
+      seconds:
+        config?.getOptionalNumber('initialDelay.seconds') ??
+        fallback.initialDelay.seconds,
     },
   };
 }

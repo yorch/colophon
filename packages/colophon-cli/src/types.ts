@@ -5,6 +5,8 @@ import type { DocStatus, DocType, Heading } from '@brnby/colophon-common';
 export interface Reference {
   url: string;
   kind: 'link' | 'image';
+  /** 1-based line in the source file, when the parser reported one. */
+  line?: number;
 }
 
 /**
@@ -44,4 +46,12 @@ export interface Diagnostic {
   level: DiagnosticLevel;
   message: string;
   path?: string;
+  /**
+   * 1-based line the diagnostic refers to.
+   *
+   * Free at the point of collection — mdast nodes carry their position and we
+   * were discarding it — and the difference between "this file has a broken
+   * link" and a location an editor can jump to.
+   */
+  line?: number;
 }

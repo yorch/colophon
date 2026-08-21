@@ -97,9 +97,14 @@ function toPageDraft(path: string, rawBytes: Buffer): PageDraft {
   // Frontmatter boundaries come from the contract rather than from a parser
   // of our own choosing, so the body we validate anchors against is byte for
   // byte the body the backend chunks.
-  const { frontmatter, body } = splitFrontmatter(rawBytes.toString('utf8'));
+  const raw = rawBytes.toString('utf8');
+  const { frontmatter, body } = splitFrontmatter(raw);
   const data = parseFrontmatterData(frontmatter);
-  const { headings, references } = parsePage(body);
+  // How many lines the frontmatter took, so reported positions are lines in
+  // the FILE rather than lines in the body the parser saw.
+  const lineOffset =
+    raw.slice(0, raw.length - body.length).split('\n').length - 1;
+  const { headings, references } = parsePage(body, lineOffset);
 
   return {
     path,

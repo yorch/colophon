@@ -6,7 +6,15 @@ export function formatDiagnostics(diagnostics: Diagnostic[]): string[] {
   return diagnostics.map(diagnostic => {
     const label =
       diagnostic.level === 'error' ? pc.red('error') : pc.yellow('warning');
-    const where = diagnostic.path ? `${pc.dim(diagnostic.path)}: ` : '';
+    // `path:line` is the shape editors and terminals already know how to turn
+    // into a jump, so it is worth matching exactly.
+    const where = diagnostic.path
+      ? `${pc.dim(
+          diagnostic.line
+            ? `${diagnostic.path}:${diagnostic.line}`
+            : diagnostic.path,
+        )}: `
+      : '';
     return `  ${label} ${where}${diagnostic.message}`;
   });
 }

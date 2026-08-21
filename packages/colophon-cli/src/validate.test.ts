@@ -239,3 +239,38 @@ describe('orphans and root', () => {
     expect(diagnostics[0].message).toMatch(/no pages found/);
   });
 });
+
+describe('diagnostic locations', () => {
+  const withRefs = (line: number) =>
+    page('a', {
+      path: 'guides/a.md',
+      references: [{ url: './nope.md', kind: 'link', line }],
+    });
+
+  it('reports the line a broken link sits on', () => {
+    // The position is free at the point of collection — mdast carries it —
+    // and it is the difference between "this file has a broken link" and a
+    // location an editor can jump to.
+    const [error] = validate({
+      pages: [withRefs(11)],
+      assets: [],
+      nav: nav(['a']),
+    }).filter(d => d.level === 'error');
+    expect(error.line).toBe(11);
+    expect(error.path).toBe('guides/a.md');
+  });
+
+  it('omits the line rather than guessing when the parser gave none', () => {
+    const [error] = validate({
+      pages: [
+        page('a', {
+          path: 'guides/a.md',
+          references: [{ url: './nope.md', kind: 'link' }],
+        }),
+      ],
+      assets: [],
+      nav: nav(['a']),
+    }).filter(d => d.level === 'error');
+    expect(error.line).toBeUndefined();
+  });
+});

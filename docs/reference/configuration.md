@@ -63,14 +63,31 @@ colophon:
 | `chunking.maxChars` | `1500` | Soft ceiling; long sections split on paragraphs |
 | `chunking.minChars` | `200` | Shorter sections merge into the next sibling |
 
-## Indexing schedule
+## Schedules
+
+Two, because the work is not comparable. They were one key until it became
+clear that a value suiting either badly misfits the other.
 
 ```yaml
 colophon:
   schedule:
-    frequency: { minutes: 10 }
-    timeout: { minutes: 15 }
+    entityLinks:
+      frequency: { minutes: 10 }
+      timeout: { minutes: 5 }
+      initialDelay: { seconds: 15 }
+    searchIndex:
+      frequency: { minutes: 60 }
+      timeout: { minutes: 30 }
+      initialDelay: { seconds: 60 }
 ```
+
+| Task | Cost | Guidance |
+| --- | --- | --- |
+| `entityLinks` | One filtered catalog query and a small table rewrite | Run often — until it runs, a newly annotated entity has no documentation tab |
+| `searchIndex` | Pages the entire corpus over HTTP | Run rarely |
+
+Note that neither of these is ingestion. A published revision is ingested
+synchronously when a channel is pointed at it, not on a schedule.
 
 ## MCP
 
