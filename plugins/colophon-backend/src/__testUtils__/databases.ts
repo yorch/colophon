@@ -33,6 +33,21 @@ export interface TestBackend {
 
 let schemaCounter = 0;
 
+/**
+ * Distinguishes one test FILE from another within the same Jest worker.
+ *
+ * `schemaCounter` alone is not enough: Jest gives every test file a fresh
+ * module registry, so the counter restarts at zero for each file while the
+ * worker keeps its pid. Two files in the same worker therefore asked for the
+ * same schema name, and `CREATE SCHEMA IF NOT EXISTS` handed the second one
+ * the first one's tables — with its rows still in them.
+ *
+ * That produced exactly the symptoms you would expect and not attribute to
+ * isolation: a revision reporting chunks nobody had asked it to build, and
+ * searches returning nothing because the rows lived in another file's schema.
+ */
+const RUN_TOKEN = Date.now().toString(36);
+
 export function testBackends(): TestBackend[] {
   const backends: TestBackend[] = [
     {
@@ -54,9 +69,12 @@ export function testBackends(): TestBackend[] {
         // A schema per connection rather than a database per connection:
         // cheaper to create, and it isolates concurrent Jest workers without
         // needing CREATE DATABASE privileges.
-        const schema = `colophon_test_${process.pid}_${schemaCounter++}`;
+        const schema = `colophon_test_${process.pid}_${RUN_TOKEN}_${schemaCounter++}`;
         const admin = knexFactory({ client: 'pg', connection });
-        await admin.raw(`CREATE SCHEMA IF NOT EXISTS ??`, [schema]);
+        // Dropped first, so a name that somehow recurs still yields empty
+        // tables rather than someone else's data.
+        await admin.raw(`DROP SCHEMA IF EXISTS ?? CASCADE`, [schema]);
+        await admin.raw(`CREATE SCHEMA ??`, [schema]);
         await admin.destroy();
         return knexFactory({
           client: 'pg',
