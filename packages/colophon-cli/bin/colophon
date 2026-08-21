@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+/*
+ * Resolves the built CLI, falling back to the TypeScript source so the binary
+ * also works from a source checkout during development.
+ */
+let main;
+try {
+  ({ main } = require('../dist/index.cjs.js'));
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  require('@backstage/cli/config/nodeTransform.cjs');
+  ({ main } = require('../src/index.ts'));
+}
+
+main(process.argv.slice(2)).then(
+  code => process.exit(code),
+  error => {
+    console.error(error);
+    process.exit(1);
+  },
+);
