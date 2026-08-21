@@ -25,10 +25,19 @@ COPY plugins/colophon/package.json plugins/colophon/
 RUN yarn install --immutable
 
 COPY tsconfig.json ./
-COPY packages/colophon-common packages/colophon-common
-COPY packages/colophon-cli packages/colophon-cli
+# Every workspace's source, not just the two that ship: `yarn tsc` typechecks
+# the repo as one program, and it is the same command developers run, so it
+# cannot drift from a Docker-only variant. Only the builder stage pays for it.
+COPY packages packages
+COPY plugins plugins
 
-# Build, then prepack. prepack rewrites each package.json's `main` and
+# tsc first. It emits the .d.ts files into dist-types/ that prepack requires;
+# without it prepack fails with "No declaration files found". This is exactly
+# the step a developer never notices missing, because dist-types/ is already
+# on their disk from an earlier run.
+RUN yarn tsc
+
+# Then build, then prepack. prepack rewrites each package.json's `main` and
 # `types` from the src entrypoints used in development to the dist ones, which
 # is what makes the built CLI resolve @brnby/colophon-common to dist rather
 # than to TypeScript source that Node cannot load.

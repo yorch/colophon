@@ -15,6 +15,10 @@ dist/
 dist-types/
 *.tsbuildinfo
 
+# backstage-cli package prepack rewrites package.json and leaves this backup;
+# postpack restores from it. A crashed publish can strand one.
+**/package.json-prepack
+
 # Test output
 coverage/
 
