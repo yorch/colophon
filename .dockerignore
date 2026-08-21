@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+**/dist-types
+.yarn/cache
+.yarn/install-state.gz
+.git
+coverage
+tmp
+*.md
+!README.md
+docs
+.github
