@@ -79,10 +79,60 @@ same page once per version.
 
 | Path | Purpose |
 | --- | --- |
-| `packages/colophon-common` | The bundle contract — manifest schema, ids, storage keys |
+| `packages/colophon-common` | The bundle contract — manifest schema, ids, storage keys, chunk types |
+| `packages/colophon-cli` | `colophon publish` / `colophon validate` — what CI runs |
+| `plugins/colophon-backend` | Storage, database, chunking, HTTP routes, search collator, MCP actions |
+| `plugins/colophon-react` | The markdown renderer and its component override registry |
+| `plugins/colophon` | Frontend plugin — entity docs tab and cross-repository docs home |
 
-More packages land as they are built: the publisher CLI, the backend plugin,
-the frontend plugin, and a shared React package for renderer extension points.
+Everything negotiates through `colophon-common`. Changing it changes the wire
+format between all four consumers, so that package is where compatibility is
+decided.
+
+## Publishing
+
+```bash
+colophon publish ./docs \
+  --bundle-id "github.com/org/repo" \
+  --channel latest \
+  --storage s3 --s3-bucket "$COLOPHON_BUCKET" \
+  --backend-url https://backstage.example.com --token "$COLOPHON_TOKEN"
+```
+
+`colophon validate ./docs` runs the same scan and validation without
+uploading, which makes it a reasonable pre-commit hook.
+
+Link an entity to a bundle with an annotation:
+
+```yaml
+metadata:
+  annotations:
+    brnby.io/colophon: github.com/org/repo
+    # or, for one shared docs tree serving several components:
+    # brnby.io/colophon: github.com/org/platform#services/billing
+```
+
+See `app-config.colophon.yaml` for backend configuration, and
+`docs/reference/configuration.md` for every key.
+
+## For agents
+
+The backend registers four read-only actions with Backstage's Actions
+Registry, which the [MCP Actions Backend][mcp] exposes to any MCP client:
+
+| Action | Returns |
+| --- | --- |
+| `colophon:search` | Ranked page *sections* with heading breadcrumbs and citable URLs |
+| `colophon:get-page` | A whole page, as Markdown |
+| `colophon:list-pages` | The navigation tree, so an agent can orient before searching |
+| `colophon:list-entities` | Which catalog entities have documentation |
+
+They return Markdown rather than HTML, which is the payoff of keeping
+Markdown as the stored artifact. Results carry a portal deep link so an agent
+can cite its source, and paginated results report how many matches were not
+shown rather than truncating silently.
+
+[mcp]: https://backstage.io/docs/ai/mcp-actions/
 
 ## Development
 
@@ -103,6 +153,14 @@ yarn verify        # lint + arch lint + typecheck + test
 | `yarn test` | Jest, single run |
 | `yarn test:watch` | Jest, watch mode |
 | `yarn build` | Build all packages |
+| `docker build -t colophon-cli .` | Build the publisher image |
+
+The publisher image runs against a mounted repository rather than baking
+source in:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work colophon-cli validate ./docs
+```
 
 ### On the two linters
 
@@ -115,6 +173,14 @@ because Yarn hoisted them to the root, which install cleanly in this repo and
 then fail for anyone consuming the published package. Biome has no equivalent.
 
 Do not add stylistic rules to `.eslintrc.js`.
+
+### Dogfooding
+
+`docs/` in this repository is itself a Colophon bundle, published with our own
+CLI. It is the fastest way to notice when the developer experience is bad, and
+it has already earned its keep: publishing it is what exposed the landing page
+being dropped from derived navigation, and a revision id that changed on every
+run because the publish timestamp was inside the hash.
 
 ## License
 
