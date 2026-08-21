@@ -1,0 +1,35 @@
+{
+  "name": "dev-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local Backstage frontend for exercising Colophon in a real app shell. Never published.",
+  "backstage": {
+    "role": "frontend"
+  },
+  "scripts": {
+    "start": "backstage-cli package start",
+    "build": "backstage-cli package build"
+  },
+  "dependencies": {
+    "@backstage/cli": "^0.36.4",
+    "@backstage/core-components": "0.18.13",
+    "@backstage/core-plugin-api": "^1.11.0",
+    "@backstage/frontend-defaults": "0.5.5",
+    "@backstage/frontend-plugin-api": "0.18.0",
+    "@backstage/plugin-app-react": "0.2.6",
+    "@backstage/plugin-catalog": "2.0.8",
+    "@backstage/plugin-search": "1.7.7",
+    "@backstage/ui": "0.17.1",
+    "@brnby/plugin-colophon": "workspace:^",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  },
+  "files": [
+    "dist"
+  ]
+}

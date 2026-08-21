@@ -21,6 +21,12 @@ COPY packages/colophon-cli/package.json packages/colophon-cli/
 COPY plugins/colophon-backend/package.json plugins/colophon-backend/
 COPY plugins/colophon-react/package.json plugins/colophon-react/
 COPY plugins/colophon/package.json plugins/colophon/
+# The local Backstage harness. Its SOURCE is never copied and it contributes
+# nothing to the image, but Yarn resolves the whole workspace graph against
+# the lockfile: a declared workspace whose manifest is missing makes
+# `--immutable` fail on a lockfile mismatch rather than skip it.
+COPY dev-app/app/package.json dev-app/app/
+COPY dev-app/backend/package.json dev-app/backend/
 
 RUN yarn install --immutable
 

@@ -1,0 +1,46 @@
+# Entities for the local harness.
+#
+# The annotation is the whole point: Colophon's entity tab appears only when
+# an entity carries `brnby.io/colophon`, and its authorizer resolves the
+# linked entity to decide whether the caller may read the bundle. An
+# unannotated entity exercises neither, so there are two here — one linked,
+# one not — because "the tab is missing" and "the tab is missing for the right
+# reason" look identical with only one.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: colophon
+  title: Colophon
+  description: Markdown documentation for the Backstage software catalog.
+  annotations:
+    brnby.io/colophon: github.com/yorch/colophon
+spec:
+  type: service
+  lifecycle: experimental
+  owner: dev-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: undocumented
+  title: Undocumented service
+  description: Carries no Colophon annotation, so it must show no Docs tab.
+spec:
+  type: service
+  lifecycle: experimental
+  owner: dev-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: dev-team
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: guest
+spec:
+  memberOf: [dev-team]

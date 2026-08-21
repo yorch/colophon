@@ -25,4 +25,4 @@ export type {
 export { ColophonClient, colophonApiRef } from './api';
 export type { DocsBrowserProps } from './components/DocsBrowser';
 export { DocsBrowser } from './components/DocsBrowser';
-export { colophonPlugin as default } from './plugin';
+export { colophonPlugin as default, colophonRouteRef } from './plugin';

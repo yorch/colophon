@@ -35,3 +35,6 @@ tmp/
 .env.local
 *.local.yaml
 app-config.local.yaml
+
+# Bundles published by `yarn dev:seed` for the local harness.
+colophon-data/

@@ -1,0 +1,74 @@
+# Configuration for the local harness in dev-app/.
+#
+# NOT an example to copy — see app-config.colophon.yaml for that. This file
+# exists so `yarn start` boots a real Backstage app with Colophon installed,
+# and it makes the choices a local machine wants (SQLite, a directory instead
+# of a bucket, guest sign-in) rather than the ones a deployment wants.
+app:
+  title: Colophon dev
+  baseUrl: http://localhost:3000
+  # plugin-app-backend serves the built frontend and looks the package up by
+  # name, defaulting to "app". Ours is "dev-app", and without this the whole
+  # BACKEND fails to start with "Cannot find module 'app/package.json'" — an
+  # error that names neither this setting nor the frontend.
+  packageName: dev-app
+
+organization:
+  name: Colophon
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    # Mermaid renders diagrams by generating SVG in a worker, which the
+    # default policy blocks.
+    worker-src: ["'self'", 'blob:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+auth:
+  providers:
+    guest: {}
+
+catalog:
+  locations:
+    - type: file
+      # Relative to the BACKEND's working directory (dev-app/backend), which
+      # is where `backstage-cli repo start` runs it — not to this file. The
+      # catalog resolves file targets against the process, and the difference
+      # is silent: a wrong path yields an empty catalog with nothing logged.
+      target: ../../dev-app/catalog/entities.yaml
+      rules:
+        - allow: [Component, Group, User]
+
+search:
+  # Lunr is the in-memory engine; it needs no service and loses its index on
+  # restart, which is what a harness wants.
+  pg:
+    highlightOptions:
+      useHighlight: false
+
+colophon:
+  storage:
+    type: local
+    local:
+      # Relative to the BACKEND's working directory (dev-app/backend), not
+      # to this file — the path is resolved by the plugin at runtime rather
+      # than by the config loader. It points at colophon-data/ in the
+      # repository root, which is where `yarn dev:seed` writes.
+      directory: ../../colophon-data
+  schedule:
+    entityLinks:
+      frequency: { seconds: 30 }
+      timeout: { minutes: 2 }
+      initialDelay: { seconds: 5 }
+    searchIndex:
+      frequency: { minutes: 2 }
+      timeout: { minutes: 5 }
+      initialDelay: { seconds: 20 }
