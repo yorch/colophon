@@ -1,5 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { blobKey } from '@brnby/colophon-common';
+import { sha256 } from './hash';
 import { build, upload } from './publish';
 import { LocalBundleStorage } from './storage';
 
@@ -207,5 +209,93 @@ describe('upload', () => {
     expect(JSON.parse((await storage.get(key)).toString('utf8'))).toEqual(
       built.manifest,
     );
+  });
+});
+
+describe('upload concurrency', () => {
+  /** Records how many operations were in flight at the busiest moment. */
+  function trackingStorage(existing = new Set<string>()) {
+    let inFlight = 0;
+    let peak = 0;
+    const stored = new Set<string>(existing);
+    const enter = async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setImmediate(resolve));
+      inFlight -= 1;
+    };
+    return {
+      peak: () => peak,
+      stored,
+      storage: {
+        async has(key: string) {
+          await enter();
+          return stored.has(key);
+        },
+        async put(key: string) {
+          await enter();
+          stored.add(key);
+        },
+        async get() {
+          throw new Error('not used');
+        },
+      },
+    };
+  }
+
+  const manyBlobs = (count: number) => {
+    const pages = Array.from({ length: count }, (_, i) => ({
+      path: `p${i}.md`,
+      rawBytes: Buffer.from(`page ${i}`),
+    }));
+    return {
+      pages: pages as never,
+      assets: [] as never,
+      manifest: {
+        bundleId: 'x/y',
+        revisionId: 'a'.repeat(64),
+        pages: pages.map(page => ({
+          path: page.path,
+          contentHash: sha256(page.rawBytes),
+        })),
+        assets: [],
+      } as never,
+    };
+  };
+
+  it('never exceeds the concurrency limit', async () => {
+    // Unbounded fan-out would open a connection per page, risking rate
+    // limits on S3 and descriptor exhaustion on a filesystem backend.
+    const tracker = trackingStorage();
+    await upload({ ...manyBlobs(50), storage: tracker.storage as never });
+    expect(tracker.peak()).toBeGreaterThan(1);
+    expect(tracker.peak()).toBeLessThanOrEqual(12);
+  });
+
+  it('uploads every blob exactly once', async () => {
+    const tracker = trackingStorage();
+    const stats = await upload({
+      ...manyBlobs(30),
+      storage: tracker.storage as never,
+    });
+    // 30 pages plus the manifest.
+    expect(stats.blobsUploaded).toBe(30);
+    expect(tracker.stored.size).toBe(31);
+  });
+
+  it('counts reused blobs correctly when they already exist', async () => {
+    const fixture = manyBlobs(10);
+    const preloaded = new Set(
+      (
+        fixture.manifest as unknown as { pages: Array<{ contentHash: string }> }
+      ).pages.map(page => blobKey(page.contentHash)),
+    );
+    const tracker = trackingStorage(preloaded);
+    const stats = await upload({
+      ...fixture,
+      storage: tracker.storage as never,
+    });
+    expect(stats.blobsUploaded).toBe(0);
+    expect(stats.blobsSkipped).toBe(10);
   });
 });

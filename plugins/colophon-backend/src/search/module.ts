@@ -6,7 +6,6 @@ import {
 // marked @alpha upstream, so this import is a known upgrade checkpoint.
 import { searchIndexRegistryExtensionPoint } from '@backstage/plugin-search-backend-node/alpha';
 import { readColophonConfig } from '../config';
-import { createColophonService } from '../service/createColophonService';
 import { DefaultColophonCollatorFactory } from './DefaultColophonCollatorFactory';
 
 /**
@@ -15,6 +14,11 @@ import { DefaultColophonCollatorFactory } from './DefaultColophonCollatorFactory
  * Registered as a module on the `search` plugin rather than from the Colophon
  * plugin itself, because the index registry belongs to the search backend and
  * a plugin may only contribute to another plugin through a module.
+ *
+ * Note what it does NOT take: a database. Running under the `search` plugin
+ * id means `coreServices.database` would hand back the search plugin's own
+ * database, not Colophon's — every plugin gets its own. The collator reads
+ * over HTTP instead.
  */
 export const searchModuleColophonCollator = createBackendModule({
   pluginId: 'search',
@@ -24,24 +28,26 @@ export const searchModuleColophonCollator = createBackendModule({
       deps: {
         indexRegistry: searchIndexRegistryExtensionPoint,
         config: coreServices.rootConfig,
-        database: coreServices.database,
         logger: coreServices.logger,
         scheduler: coreServices.scheduler,
+        discovery: coreServices.discovery,
+        auth: coreServices.auth,
       },
-      async init({ indexRegistry, config, database, logger, scheduler }) {
-        const { appBaseUrl } = readColophonConfig(config);
-        const colophon = await createColophonService({
-          config,
-          database,
-          logger,
-        });
+      async init({
+        indexRegistry,
+        config,
+        logger,
+        scheduler,
+        discovery,
+        auth,
+      }) {
+        const { appBaseUrl, schedule } = readColophonConfig(config);
 
         indexRegistry.addCollator({
-          schedule: scheduler.createScheduledTaskRunner(
-            readColophonConfig(config).schedule,
-          ),
+          schedule: scheduler.createScheduledTaskRunner(schedule),
           factory: new DefaultColophonCollatorFactory({
-            colophon,
+            discovery,
+            auth,
             logger,
             appBaseUrl,
           }),

@@ -55,6 +55,11 @@ function wildcardParam(req: Request): string | undefined {
 
 export const MAX_SEARCH_LIMIT = 50;
 
+const indexableQuery = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
 const searchQuery = z.object({
   q: z.string().min(1, 'a query is required'),
   bundleId: listParam,
@@ -172,6 +177,32 @@ export async function createRouter(options: {
       indexed: result.ingest.indexed,
       chunkCount: result.ingest.chunkCount,
     });
+  });
+
+  /**
+   * Everything the search collator needs, paginated.
+   *
+   * Exists because a Backstage plugin's database is private to that plugin —
+   * the search module runs under the `search` plugin id and so cannot read
+   * colophon's tables. Cross-plugin reads go over HTTP, which is also how
+   * TechDocs' own collator reaches its data.
+   */
+  router.get('/indexable', async (req, res) => {
+    // Service credentials only: this is an internal projection of the whole
+    // corpus, not something a browser should be able to page through.
+    await httpAuth.credentials(req, { allow: ['service'] });
+    const { offset, limit } = parse(indexableQuery, req.query);
+    const { rows, total } = await colophon.db.listIndexableChunks({
+      offset,
+      limit,
+    });
+    // Entity links travel with the projection rather than being joined into
+    // it: a bundle can carry several (a root one plus one per component in a
+    // monorepo), and joining would emit the same chunk once per matching
+    // link. The table is one row per annotated entity, so sending it whole
+    // is cheaper than any of the alternatives.
+    const links = await colophon.db.listEntityLinks();
+    res.json({ rows, total, offset, limit, links });
   });
 
   router.get('/search', async (req, res) => {

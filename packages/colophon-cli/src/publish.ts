@@ -120,6 +120,44 @@ export async function build(options: PublishOptions): Promise<BuildResult> {
  * differs from main by three pages stores three blobs, and an unchanged page
  * shared by fifty revisions is stored once.
  */
+/**
+ * Blobs in flight at once during an upload.
+ *
+ * Every blob costs at least one round trip to check for existence and
+ * possibly a second to store it, so publishing a large bundle serially is
+ * almost entirely network wait — minutes of CI time for a corpus of a few
+ * thousand pages. Bounded rather than a plain Promise.all over everything:
+ * an unbounded fan-out would open a connection per page, which risks rate
+ * limits on S3 and file descriptor exhaustion on a filesystem backend.
+ */
+const UPLOAD_CONCURRENCY = 12;
+
+/**
+ * Runs `worker` over `items` with at most `limit` in flight.
+ *
+ * Hand-rolled rather than adding a dependency: the whole implementation is
+ * a handful of lines, and the CLI is deliberately thin.
+ */
+async function forEachConcurrent<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      // Each runner takes the next index rather than a fixed slice, so one
+      // slow blob cannot leave the others idle behind it.
+      while (next < items.length) {
+        const index = next++;
+        await worker(items[index]);
+      }
+    },
+  );
+  await Promise.all(runners);
+}
+
 export async function upload(options: {
   manifest: Manifest;
   pages: PageDraft[];
@@ -169,24 +207,27 @@ export async function upload(options: {
 
   // Identical content within one bundle is one upload, not several.
   const seen = new Set<string>();
-  for (const blob of blobs) {
+  const unique = blobs.filter(blob => {
     if (seen.has(blob.hash)) {
       stats.blobsSkipped += 1;
       stats.bytesSkipped += blob.bytes.byteLength;
-      continue;
+      return false;
     }
     seen.add(blob.hash);
+    return true;
+  });
 
+  await forEachConcurrent(unique, UPLOAD_CONCURRENCY, async blob => {
     const key = blobKey(blob.hash);
     if (await storage.has(key)) {
       stats.blobsSkipped += 1;
       stats.bytesSkipped += blob.bytes.byteLength;
-      continue;
+      return;
     }
     await storage.put(key, blob.bytes, blob.contentType);
     stats.blobsUploaded += 1;
     stats.bytesUploaded += blob.bytes.byteLength;
-  }
+  });
 
   // The manifest goes last: until it exists the revision is not readable, so
   // a crash mid-upload leaves orphaned blobs rather than a broken revision.

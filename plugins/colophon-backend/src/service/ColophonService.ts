@@ -48,6 +48,34 @@ export interface ResolvedPage {
  * points at. A PR preview that is published and never pointed at costs a few
  * index rows, not a full re-chunk of the corpus.
  */
+/** Page blobs read at once while indexing a revision. */
+const INGEST_CONCURRENCY = 12;
+
+/**
+ * Maps `items` through `worker` with at most `limit` in flight, preserving
+ * input order in the result.
+ *
+ * Hand-rolled rather than adding a dependency; the implementation is short
+ * and the alternative is a transitive package for ten lines.
+ */
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await worker(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
 export class ColophonService {
   readonly #db: ColophonDatabase;
   readonly #storage: BundleStorage;
@@ -95,8 +123,12 @@ export class ColophonService {
       options.bundleId,
       options.revisionId,
     );
+    // Only the revision row here. Pointing a channel at it runs ingest,
+    // which replaces the page rows unconditionally — writing them here too
+    // would DELETE and re-INSERT every page of the bundle twice on the
+    // common publish path. Nothing can read an unpointed revision anyway,
+    // since every read resolves through a channel.
     await this.#db.upsertRevision(manifest);
-    await this.#db.replacePages(options.revisionId, manifest.pages);
     return this.setChannel({
       bundleId: options.bundleId,
       channel,
@@ -195,17 +227,29 @@ export class ColophonService {
       return { revisionId, indexed: false, chunkCount: existing.length };
     }
 
+    // Blobs are fetched with bounded concurrency. Each is a round trip to
+    // object storage, so reading them one at a time makes indexing almost
+    // entirely network wait — minutes for a large bundle, during which
+    // search results stay stale. Bounded rather than all at once: a
+    // thousand-page bundle would otherwise open a thousand connections.
+    const bodies = await mapConcurrent(
+      manifest.pages,
+      INGEST_CONCURRENCY,
+      async page => this.#storage.get(blobKey(page.contentHash)),
+    );
+
     const chunks: Array<Omit<ChunkRecord, 'id' | 'revisionId'>> = [];
-    for (const page of manifest.pages) {
-      const body = await this.#storage.get(blobKey(page.contentHash));
+    // Chunking itself stays sequential and in page order, so chunk ordinals
+    // and the resulting ids are identical run to run.
+    manifest.pages.forEach((page, index) => {
       const derived = chunkPage(
-        { title: page.title, markdown: body.toString('utf8') },
+        { title: page.title, markdown: bodies[index].toString('utf8') },
         this.#chunking,
       );
       for (const chunk of derived) {
         chunks.push({ slug: page.slug, ...chunk });
       }
-    }
+    });
     await this.#db.replaceChunks(revisionId, chunks);
     await this.#db.markIndexed(revisionId, new Date().toISOString());
     this.#logger.info(
