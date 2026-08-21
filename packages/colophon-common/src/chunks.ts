@@ -4,11 +4,12 @@ import { bundleIdSchema, contentHashSchema, revisionIdSchema } from './ids';
 /**
  * Retrieval chunks are what agents actually receive from `colophon:search`.
  *
- * Chunking deliberately happens in the BACKEND at index time, not in the CLI
- * at publish time. Strategy will evolve as we learn what agents retrieve well,
- * and re-chunking must not require every repository to re-run its CI. The
- * published bundle therefore carries pages and headings; the backend derives
- * chunks from them.
+ * The SHAPE lives here because it crosses the wire. The chunking PARAMETERS
+ * do not, and are in plugins/colophon-backend/src/indexing/options.ts: the
+ * whole point of chunking at index time is that the strategy can change
+ * without any repository re-running CI, and a tuning knob in this package
+ * would make raising maxChars a version bump of the contract the publisher
+ * depends on. That is the opposite of the constraint it exists to satisfy.
  */
 
 export const chunkSchema = z.object({
@@ -31,27 +32,3 @@ export const chunkSchema = z.object({
   contentHash: contentHashSchema,
 });
 export type Chunk = z.infer<typeof chunkSchema>;
-
-/**
- * Chunking parameters.
- *
- * Splitting on H2/H3 rather than H2 alone matters because reference pages put
- * one endpoint or one option per H3; splitting only on H2 would glue thirty
- * unrelated options into a single chunk and destroy precision. The size
- * ceiling then catches prose sections that run long, and the floor merges
- * heading stubs that carry no content of their own.
- */
-export const chunkingOptionsSchema = z.object({
-  /** Heading depths that start a new chunk. */
-  splitDepths: z.array(z.number().int().min(1).max(6)).default([2, 3]),
-  /** Soft ceiling in characters; longer sections are split on paragraphs. */
-  maxChars: z.number().int().positive().default(1500),
-  /** Sections shorter than this merge into the following sibling. */
-  minChars: z.number().int().nonnegative().default(200),
-  /** Characters of the preceding chunk repeated for continuity. */
-  overlapChars: z.number().int().nonnegative().default(0),
-});
-export type ChunkingOptions = z.infer<typeof chunkingOptionsSchema>;
-
-export const DEFAULT_CHUNKING_OPTIONS: ChunkingOptions =
-  chunkingOptionsSchema.parse({});

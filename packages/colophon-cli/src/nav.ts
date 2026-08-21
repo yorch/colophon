@@ -1,4 +1,5 @@
 import {
+  isEntrySlug,
   type NavEntrySpec,
   type NavNode,
   slugFromPath,
@@ -46,7 +47,10 @@ function buildExplicitNav(
         });
       }
       return {
-        title: entry.title ?? page?.title ?? humanize(slug || 'home'),
+        title:
+          entry.title ??
+          page?.title ??
+          humanize(isEntrySlug(slug) ? 'home' : slug),
         slug,
         children,
       };
@@ -65,7 +69,8 @@ function buildDerivedNav(pages: PageDraft[]): NavNode[] {
   const root: TreeNode = { segment: '', children: new Map() };
 
   for (const page of pages) {
-    const segments = page.slug ? page.slug.split('/') : [];
+    // The landing page has no segments; it is the tree's own root.
+    const segments = isEntrySlug(page.slug) ? [] : page.slug.split('/');
     let node = root;
     for (const segment of segments) {
       let next = node.children.get(segment);

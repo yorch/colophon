@@ -1,6 +1,6 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { Box, Flex, Text } from '@backstage/ui';
-import { scopeNavigation } from '@brnby/colophon-common';
+import { entrySlug, scopeNavigation } from '@brnby/colophon-common';
 import {
   ColophonComponentsProvider,
   ColophonMarkdown,
@@ -104,10 +104,9 @@ export function DocsBrowser({
   // bundle showed an arbitrary page rather than its index.md. Resolve by
   // identity: the entry page of the current scope, falling back to position
   // only when no such page exists.
-  const entrySlug = subpath ?? '';
+  const entry = entrySlug(subpath);
   const activeSlug =
-    slug ??
-    (pages.some(page => page.slug === entrySlug) ? entrySlug : pages[0]?.slug);
+    slug ?? (pages.some(page => page.slug === entry) ? entry : pages[0]?.slug);
   const page = pages.find(candidate => candidate.slug === activeSlug);
 
   useEffect(() => {

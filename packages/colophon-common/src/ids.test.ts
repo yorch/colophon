@@ -1,7 +1,10 @@
 import {
   bundleIdSchema,
   channelSchema,
+  ENTRY_SLUG,
+  entrySlug,
   formatBundleRef,
+  isEntrySlug,
   isWithinSubpath,
   normalizeSlug,
   parseBundleRef,
@@ -149,5 +152,34 @@ describe('isWithinSubpath', () => {
 
   it('rejects an unrelated page', () => {
     expect(isWithinSubpath('guides/deploy', 'services/billing')).toBe(false);
+  });
+});
+
+describe('the entry slug', () => {
+  it('is the empty string, which is why it needs a name', () => {
+    // Every `slug || fallback` written against this treats the landing page
+    // as "no page". The constant exists so the comparison has somewhere to
+    // live rather than being re-invented.
+    expect(ENTRY_SLUG).toBe('');
+    expect(Boolean(ENTRY_SLUG)).toBe(false);
+  });
+
+  it('identifies the landing page', () => {
+    expect(isEntrySlug('')).toBe(true);
+    expect(isEntrySlug('guides/deploy')).toBe(false);
+  });
+
+  it('opens an unscoped bundle at its root', () => {
+    expect(entrySlug()).toBe(ENTRY_SLUG);
+    expect(entrySlug(undefined)).toBe(ENTRY_SLUG);
+  });
+
+  it('opens a scoped entity at its own subtree', () => {
+    expect(entrySlug('services/billing')).toBe('services/billing');
+  });
+
+  it('agrees with slugFromPath about the docs-root index', () => {
+    expect(slugFromPath('index.md')).toBe(ENTRY_SLUG);
+    expect(isEntrySlug(slugFromPath('index.md'))).toBe(true);
   });
 });

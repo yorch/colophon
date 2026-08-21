@@ -5,8 +5,6 @@ import { mockServices } from '@backstage/backend-test-utils';
 import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import {
   blobKey,
-  type ChunkingOptions,
-  DEFAULT_CHUNKING_OPTIONS,
   MANIFEST_SCHEMA_VERSION,
   type Manifest,
   manifestKey,
@@ -15,6 +13,10 @@ import {
 } from '@brnby/colophon-common';
 import type { Knex } from 'knex';
 import { ColophonDatabase } from '../database';
+import {
+  type ChunkingOptions,
+  DEFAULT_CHUNKING_OPTIONS,
+} from '../indexing/options';
 import {
   createDocsAuthorizer,
   type DocsAuthorizer,

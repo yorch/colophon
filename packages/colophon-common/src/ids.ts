@@ -135,3 +135,37 @@ export function isWithinSubpath(slug: string, subpath?: string): boolean {
   }
   return slug === subpath || slug.startsWith(`${subpath}/`);
 }
+
+/**
+ * The slug of a bundle's landing page.
+ *
+ * A named constant because the value is the EMPTY STRING, and an empty
+ * string is falsy. Every `slug || fallback` and `slug ? a : b` written
+ * against it silently treats "the landing page" as "no page", and that
+ * mistake has now been made three separate times in this codebase: the
+ * landing page was dropped from derived navigation, it was omitted from a
+ * URL as though absent, and opening a bundle resolved to whichever page
+ * sorted first instead of to the index.
+ *
+ * Naming it does not make the string truthy. What it does is give the
+ * concept somewhere to live, so the next person writing this comparison has
+ * `isEntrySlug` to reach for instead of inventing a fourth version.
+ */
+export const ENTRY_SLUG = '';
+
+/**
+ * The slug that opens a bundle, or a scoped subtree of one.
+ *
+ * An entity scoped to `services/billing` opens at that page; an unscoped
+ * bundle opens at its root index. Callers should ask for this rather than
+ * falling back to whichever page happens to sort first, which is what the
+ * portal did before the concept existed.
+ */
+export function entrySlug(subpath?: string): string {
+  return subpath ?? ENTRY_SLUG;
+}
+
+/** Whether a slug addresses a bundle's landing page. */
+export function isEntrySlug(slug: string): boolean {
+  return slug === ENTRY_SLUG;
+}

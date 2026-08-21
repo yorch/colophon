@@ -1,6 +1,7 @@
 import {
   type Asset,
   blobKey,
+  isEntrySlug,
   MANIFEST_SCHEMA_VERSION,
   type Manifest,
   manifestKey,
@@ -74,7 +75,7 @@ export async function build(options: PublishOptions): Promise<BuildResult> {
     mediaType: asset.mediaType,
   }));
 
-  const root = pages.find(page => page.slug === '');
+  const root = pages.find(page => isEntrySlug(page.slug));
 
   /**
    * What the revision id is computed from.

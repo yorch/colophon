@@ -2,7 +2,7 @@ import type { RootConfigService } from '@backstage/backend-plugin-api';
 import {
   type ChunkingOptions,
   chunkingOptionsSchema,
-} from '@brnby/colophon-common';
+} from './indexing/options';
 
 export interface ColophonConfig {
   chunking: ChunkingOptions;

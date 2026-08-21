@@ -1,4 +1,5 @@
 import {
+  isEntrySlug,
   type NavNode,
   resolveReference,
   slugFromPath,
@@ -92,7 +93,7 @@ function checkRoot(pages: PageDraft[]): Diagnostic[] {
       },
     ];
   }
-  return pages.some(page => page.slug === '')
+  return pages.some(page => isEntrySlug(page.slug))
     ? []
     : [
         {

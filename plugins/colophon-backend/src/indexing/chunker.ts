@@ -1,14 +1,11 @@
 import { createHash } from 'node:crypto';
-import {
-  type ChunkingOptions,
-  DEFAULT_CHUNKING_OPTIONS,
-  stripFrontmatter,
-} from '@brnby/colophon-common';
+import { stripFrontmatter } from '@brnby/colophon-common';
 import GithubSlugger from 'github-slugger';
 import { toString as mdastToString } from 'mdast-util-to-string';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
+import { type ChunkingOptions, DEFAULT_CHUNKING_OPTIONS } from './options';
 
 /**
  * A chunk as derived from a page body, before it is given a bundle and a

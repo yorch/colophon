@@ -2,7 +2,6 @@ import type { LoggerService } from '@backstage/backend-plugin-api';
 import { InputError, NotFoundError } from '@backstage/errors';
 import {
   blobKey,
-  type ChunkingOptions,
   DEFAULT_CHANNEL,
   type Manifest,
   manifestKey,
@@ -17,6 +16,7 @@ import type {
   PageRecord,
 } from '../database';
 import { chunkPage } from '../indexing/chunker';
+import type { ChunkingOptions } from '../indexing/options';
 import type { BundleStorage } from '../storage';
 
 export interface ColophonServiceOptions {
