@@ -1,0 +1,56 @@
+{
+  "name": "@brnby/plugin-colophon-backend",
+  "version": "0.1.0",
+  "description": "Colophon backend — bundle storage, channels, search indexing, and MCP actions.",
+  "license": "Apache-2.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.cjs.js",
+    "types": "dist/index.d.ts"
+  },
+  "backstage": {
+    "role": "backend-plugin",
+    "pluginId": "colophon"
+  },
+  "scripts": {
+    "build": "backstage-cli package build",
+    "clean": "backstage-cli package clean",
+    "test": "backstage-cli package test",
+    "prepack": "backstage-cli package prepack",
+    "postpack": "backstage-cli package postpack"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1115.0",
+    "@backstage/backend-plugin-api": "^1.9.3",
+    "@backstage/catalog-client": "^1.16.1",
+    "@backstage/catalog-model": "^1.7.6",
+    "@backstage/config": "^1.3.8",
+    "@backstage/errors": "^1.3.1",
+    "@backstage/plugin-catalog-node": "^2.2.3",
+    "@backstage/plugin-permission-common": "^0.9.10",
+    "@backstage/plugin-permission-node": "^0.11.2",
+    "@backstage/plugin-search-common": "^1.2.24",
+    "@brnby/colophon-common": "workspace:^",
+    "express": "^4.22.0",
+    "express-promise-router": "^4.1.0",
+    "github-slugger": "^2.0.0",
+    "knex": "^3.3.0",
+    "mdast-util-to-string": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@backstage/backend-test-utils": "^1.9.0",
+    "@types/express": "^4.17.21",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0"
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
+}
