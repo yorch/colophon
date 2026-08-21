@@ -172,9 +172,13 @@ export class ColophonService {
       : await this.readManifest(bundleId, revisionId);
     if (!revision) {
       await this.#db.upsertRevision(manifest);
-      await this.#db.replacePages(revisionId, manifest.pages);
       revision = await this.#db.getRevision(revisionId);
     }
+    // Pages are replaced unconditionally rather than only on first sight.
+    // A failure between upsertRevision and this call would otherwise leave a
+    // revision row with no pages, which reads as a 404 on every page and
+    // which ingest would never repair, because the revision row exists.
+    await this.#db.replacePages(revisionId, manifest.pages);
     if (revision?.indexedAt && !options.force) {
       const existing = await this.#db.listChunks(revisionId);
       return { revisionId, indexed: false, chunkCount: existing.length };
