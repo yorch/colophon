@@ -1,4 +1,4 @@
-import { mockServices } from '@backstage/backend-test-utils';
+import { mockCredentials, mockServices } from '@backstage/backend-test-utils';
 import express from 'express';
 import type { Knex } from 'knex';
 import request from 'supertest';
@@ -148,6 +148,125 @@ describeEachBackend('router', backend => {
     expect(
       (await request(app).get(bundlePath('/pages/not/a/page'))).status,
     ).toBe(404);
+  });
+
+  describe('a caller who may not see the linked entity', () => {
+    /** Same corpus, but the catalog hides the entity the bundle links to. */
+    async function restricted() {
+      const restrictedKnex = await backend.connect();
+      const h = await createHarness({
+        knex: restrictedKnex,
+        visibleEntityRefs: [],
+      });
+      await h.register({
+        revisionId: REV,
+        channel: 'latest',
+        isDefault: true,
+        pages: [
+          { slug: '', title: 'Home', markdown: `# Home\n\n${longBody('h')}` },
+          {
+            slug: 'guides/deploy',
+            title: 'Deploy',
+            markdown: `## S\n\n${longBody('d')}`,
+          },
+        ],
+      });
+      await h.db.replaceEntityLinks([
+        { entityRef: 'component:default/hidden', bundleId: DEFAULT_BUNDLE },
+      ]);
+
+      const restrictedApp = express().use(
+        await createRouter({
+          colophon: h.colophon,
+          httpAuth: mockServices.httpAuth(),
+          authorizer: h.authorizer,
+          logger: mockServices.logger.mock(),
+          appBaseUrl: 'http://localhost:3000',
+        }),
+      );
+      restrictedApp.use(
+        (
+          error: Error,
+          _req: express.Request,
+          res: express.Response,
+          _next: unknown,
+        ) => {
+          res.status(STATUS_BY_ERROR[error.name] ?? 500).json({
+            error: { name: error.name },
+          });
+        },
+      );
+      return {
+        app: restrictedApp,
+        cleanup: async () => {
+          await h.cleanup();
+          await restrictedKnex.destroy();
+        },
+      };
+    }
+
+    it.each([
+      ['landing page', '/pages'],
+      ['nested page', '/pages/guides/deploy'],
+      ['manifest', '/manifest'],
+      ['channels', '/channels'],
+    ])('reports the %s as not found', async (_name, suffix) => {
+      // NotFound rather than Forbidden: saying "forbidden" would confirm the
+      // bundle exists, and a bundle id is a repository name.
+      const r = await restricted();
+      try {
+        expect((await request(r.app).get(bundlePath(suffix))).status).toBe(404);
+      } finally {
+        await r.cleanup();
+      }
+    });
+
+    it('omits it from the bundle list rather than failing', async () => {
+      const r = await restricted();
+      try {
+        const res = await request(r.app).get('/bundles');
+        expect(res.status).toBe(200);
+        expect(res.body.bundles).toEqual([]);
+      } finally {
+        await r.cleanup();
+      }
+    });
+
+    it('omits its chunks from search', async () => {
+      const r = await restricted();
+      try {
+        const res = await request(r.app).get('/search').query({ q: 'deploy' });
+        expect(res.status).toBe(200);
+        expect(res.body.results).toEqual([]);
+        expect(res.body.total).toBe(0);
+      } finally {
+        await r.cleanup();
+      }
+    });
+  });
+
+  describe('the indexable projection', () => {
+    it('refuses a user token', async () => {
+      // It pages the ENTIRE corpus across every bundle, bypassing the
+      // per-bundle authorization the other routes apply, so only the search
+      // collator's service identity may reach it.
+      const res = await request(app)
+        .get('/indexable')
+        .set('authorization', mockCredentials.user.header());
+      expect(res.status).toBe(403);
+    });
+
+    it('refuses an unauthenticated caller', async () => {
+      expect((await request(app).get('/indexable')).status).toBe(403);
+    });
+
+    it('serves a service token', async () => {
+      const res = await request(app)
+        .get('/indexable')
+        .set('authorization', mockCredentials.service.header());
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.rows)).toBe(true);
+    });
   });
 
   it('400s when registering a revision with a malformed body', async () => {
