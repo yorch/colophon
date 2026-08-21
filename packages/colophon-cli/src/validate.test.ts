@@ -274,3 +274,46 @@ describe('diagnostic locations', () => {
     expect(error.line).toBeUndefined();
   });
 });
+
+describe('--strict', () => {
+  /**
+   * `--strict` is documented as "treat advisory diagnostics as errors", and a
+   * team adopts it in CI on the strength of that sentence. Promoting only
+   * SOME advisories is worse than promoting none: the build is green, the
+   * gate is believed to be in place, and the class of problem it was adopted
+   * to catch ships anyway.
+   *
+   * So the assertion here is deliberately not "these three checks" — it is
+   * that NOTHING advisory survives, which is the property that stays true
+   * when a fourth advisory check is added later.
+   */
+  const everyAdvisory = () => {
+    const pages = [
+      // Orphaned (nav is empty), no description, and no index.md at the root
+      // — one page that trips every advisory check at once.
+      page('a', { description: undefined }),
+      page('b', { description: undefined }),
+    ];
+    return { pages, assets: [], nav: [] };
+  };
+
+  it('leaves advisories advisory by default', () => {
+    const diagnostics = validate(everyAdvisory());
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.every(d => d.level === 'warning')).toBe(true);
+  });
+
+  it('promotes every advisory, not just the description check', () => {
+    const diagnostics = validate({ ...everyAdvisory(), strict: true });
+    const surviving = diagnostics.filter(d => d.level !== 'error');
+    expect(surviving).toEqual([]);
+  });
+
+  it('still reports the same problems, only louder', () => {
+    const lax = validate(everyAdvisory()).map(d => d.message);
+    const strict = validate({ ...everyAdvisory(), strict: true }).map(
+      d => d.message,
+    );
+    expect(strict).toEqual(lax);
+  });
+});

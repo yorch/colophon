@@ -3,6 +3,7 @@ import { basename, extname } from 'node:path';
 import {
   DOCS_CONFIG_FILENAMES,
   type DocsConfig,
+  type DocType,
   docStatusSchema,
   docsConfigSchema,
   docTypeSchema,
@@ -16,12 +17,14 @@ import { z } from 'zod';
 import { humanize } from './humanize';
 import { parsePage } from './markdown';
 import { mediaTypeFor } from './mediaType';
-import type { AssetDraft, PageDraft } from './types';
+import type { AssetDraft, Diagnostic, PageDraft } from './types';
 
 export interface ScanResult {
   config: DocsConfig;
   pages: PageDraft[];
   assets: AssetDraft[];
+  /** Problems with the scan itself, as opposed to with the content. */
+  diagnostics: Diagnostic[];
 }
 
 /** Never published: editor droppings and the config file itself. */
@@ -100,25 +103,75 @@ export async function scan(docsDir: string): Promise<ScanResult> {
   });
   entries.sort();
 
+  const diagnostics = await checkExcludePatterns(docsDir, config.exclude);
+
   const pages: PageDraft[] = [];
   const assets: AssetDraft[] = [];
 
   for (const path of entries) {
-    if (DOCS_CONFIG_FILENAMES.includes(basename(path) as never)) {
+    // Only the config file at the ROOT is ours. Matching by basename at any
+    // depth quietly refuses to publish a page about docs.yaml — which, in a
+    // repository whose documentation covers its own tooling, is exactly the
+    // page someone will write.
+    if (DOCS_CONFIG_FILENAMES.includes(path as never)) {
       continue;
     }
     const bytes = await readFile(`${docsDir}/${path}`);
     if (/\.mdx?$/i.test(path)) {
-      pages.push(toPageDraft(path, bytes));
+      pages.push(toPageDraft(path, bytes, config.defaultType));
     } else {
       assets.push({ path, mediaType: mediaTypeFor(path), bytes });
     }
   }
 
-  return { config, pages, assets };
+  return { config, pages, assets, diagnostics };
 }
 
-function toPageDraft(path: string, rawBytes: Buffer): PageDraft {
+/**
+ * Reports exclude patterns that match nothing.
+ *
+ * An exclude that silently does nothing is indistinguishable from one that
+ * works, and the two failures it hides point in opposite directions: a
+ * leading slash (`/drafts/**`) excludes nothing, so drafts get published,
+ * while a pattern that is broader than intended excludes everything. Only the
+ * second is loud on its own — the first is a green build that publishes what
+ * the author asked to withhold.
+ *
+ * Advisory rather than fatal because a pattern can legitimately match nothing
+ * today: a repository may carry a shared docs.yaml that excludes `drafts/**`
+ * in every component, most of which have no drafts.
+ */
+async function checkExcludePatterns(
+  docsDir: string,
+  patterns: string[],
+): Promise<Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  for (const pattern of patterns) {
+    const matches = await fg(pattern, {
+      cwd: docsDir,
+      onlyFiles: true,
+      dot: false,
+    });
+    if (matches.length === 0) {
+      diagnostics.push({
+        level: 'warning',
+        message: `exclude pattern "${pattern}" matches no files${
+          pattern.startsWith('/')
+            ? '; patterns are relative to the docs root, so the leading slash is why'
+            : ''
+        }`,
+        path: 'docs.yaml',
+      });
+    }
+  }
+  return diagnostics;
+}
+
+function toPageDraft(
+  path: string,
+  rawBytes: Buffer,
+  defaultType: DocType | undefined,
+): PageDraft {
   // Frontmatter boundaries come from the contract rather than from a parser
   // of our own choosing, so the body we validate anchors against is byte for
   // byte the body the backend chunks.
@@ -136,7 +189,10 @@ function toPageDraft(path: string, rawBytes: Buffer): PageDraft {
     slug: slugFromPath(path),
     title: resolveTitle(path, data.title, headings[0]),
     description: optionalString(data.description),
-    type: docTypeSchema.optional().parse(data.type ?? undefined),
+    // The page's own frontmatter wins; docs.yaml supplies the fallback for a
+    // repository whose docs are all one Diataxis type, which is the case the
+    // setting exists for.
+    type: docTypeSchema.optional().parse(data.type ?? defaultType ?? undefined),
     status: docStatusSchema.parse(data.status ?? 'current'),
     tags: toStringArray(data.tags),
     navOrder: typeof data.nav_order === 'number' ? data.nav_order : undefined,

@@ -5,7 +5,12 @@ import {
   slugFromPath,
 } from '@brnby/colophon-common';
 import { reachableSlugs } from './nav';
-import type { AssetDraft, Diagnostic, PageDraft } from './types';
+import type {
+  AssetDraft,
+  Diagnostic,
+  DiagnosticLevel,
+  PageDraft,
+} from './types';
 
 export interface ValidateOptions {
   pages: PageDraft[];
@@ -28,12 +33,20 @@ export function validate(options: ValidateOptions): Diagnostic[] {
   const { pages, assets, nav, strict = false } = options;
   const diagnostics: Diagnostic[] = [];
 
+  // --strict advertises "treat advisory diagnostics as errors", so it has to
+  // reach ALL of them. It used to be passed only to the description check,
+  // which meant a team that adopted it in CI believing it gated every
+  // advisory could publish a bundle whose entire navigation was unreachable,
+  // green.
+  const advisory = (level: DiagnosticLevel): DiagnosticLevel =>
+    strict ? 'error' : level;
+
   diagnostics.push(...checkDuplicateSlugs(pages));
   diagnostics.push(...checkTitles(pages));
-  diagnostics.push(...checkRoot(pages));
+  diagnostics.push(...checkRoot(pages, advisory));
   diagnostics.push(...checkReferences(pages, assets));
-  diagnostics.push(...checkDescriptions(pages, strict));
-  diagnostics.push(...checkOrphans(pages, nav));
+  diagnostics.push(...checkDescriptions(pages, advisory));
+  diagnostics.push(...checkOrphans(pages, nav, advisory));
 
   return diagnostics;
 }
@@ -79,7 +92,9 @@ function checkTitles(pages: PageDraft[]): Diagnostic[] {
     }));
 }
 
-function checkRoot(pages: PageDraft[]): Diagnostic[] {
+type Advisory = (level: DiagnosticLevel) => DiagnosticLevel;
+
+function checkRoot(pages: PageDraft[], advisory: Advisory): Diagnostic[] {
   if (pages.length === 0) {
     // An empty bundle is almost always a wrong --docs-dir, a too-broad
     // exclude, or a build that produced nothing. Publishing it repoints the
@@ -97,32 +112,39 @@ function checkRoot(pages: PageDraft[]): Diagnostic[] {
     ? []
     : [
         {
-          level: 'warning',
+          level: advisory('warning'),
           message:
             'no index.md at the docs root, so the bundle has no landing page',
         },
       ];
 }
 
-function checkDescriptions(pages: PageDraft[], strict: boolean): Diagnostic[] {
+function checkDescriptions(
+  pages: PageDraft[],
+  advisory: Advisory,
+): Diagnostic[] {
   // A weak description is what makes an agent fetch a whole page to find out
   // it was the wrong one, so this is advisory by default and fatal under
   // --strict once a team has adopted the convention.
   return pages
     .filter(page => !page.description)
     .map(page => ({
-      level: strict ? ('error' as const) : ('warning' as const),
+      level: advisory('warning'),
       message: 'missing frontmatter description',
       path: page.path,
     }));
 }
 
-function checkOrphans(pages: PageDraft[], nav: NavNode[]): Diagnostic[] {
+function checkOrphans(
+  pages: PageDraft[],
+  nav: NavNode[],
+  advisory: Advisory,
+): Diagnostic[] {
   const reachable = reachableSlugs(nav);
   return pages
     .filter(page => !reachable.has(page.slug))
     .map(page => ({
-      level: 'warning' as const,
+      level: advisory('warning'),
       message: 'page is not reachable from the navigation',
       path: page.path,
     }));

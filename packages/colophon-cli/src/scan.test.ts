@@ -47,6 +47,70 @@ describe('scan', () => {
     expect((await scan(await fixture())).pages).toEqual([]);
   });
 
+  it('publishes a page that happens to be named docs.yaml.md', async () => {
+    // The config file is the one at the ROOT. A repository documenting its own
+    // tooling will write `reference/docs.yaml.md`, and dropping every path
+    // whose basename matched would silently refuse to publish exactly that.
+    const result = await scan(
+      await fixture({
+        'docs.yaml': 'title: Docs\n',
+        'index.md': '# Home\n',
+        'reference/docs.yaml': 'not config, just an example\n',
+      }),
+    );
+    expect(result.assets.map(asset => asset.path)).toEqual([
+      'reference/docs.yaml',
+    ]);
+    expect(result.config.title).toBe('Docs');
+  });
+
+  it('applies defaultType to pages that declare none', async () => {
+    const result = await scan(
+      await fixture({
+        'docs.yaml': 'defaultType: how-to\n',
+        'index.md': '# Home\n',
+        'why.md': '---\ntype: explanation\n---\n\n# Why\n',
+      }),
+    );
+    // The page's own frontmatter still wins — the default fills gaps, it does
+    // not overwrite.
+    expect(
+      Object.fromEntries(result.pages.map(page => [page.slug, page.type])),
+    ).toEqual({ '': 'how-to', why: 'explanation' });
+  });
+
+  it('warns about an exclude pattern that matches nothing', async () => {
+    // An exclude that does nothing looks exactly like one that works, and the
+    // failure it hides is that the drafts get published.
+    const result = await scan(
+      await fixture({
+        'docs.yaml': 'exclude:\n  - /drafts/**\n  - notes/**\n',
+        'index.md': '# Home\n',
+        'drafts/wip.md': '# WIP\n',
+      }),
+    );
+    const messages = result.diagnostics.map(d => d.message);
+    expect(messages).toHaveLength(2);
+    // The leading slash is the whole reason the first one silently failed, so
+    // the message has to say so rather than just reporting zero matches.
+    expect(messages[0]).toMatch(/leading slash/);
+    expect(messages[1]).toMatch(/"notes\/\*\*" matches no files$/);
+    // ...and the draft it failed to exclude is still there to be published.
+    expect(result.pages.map(page => page.slug)).toContain('drafts/wip');
+  });
+
+  it('says nothing when every exclude pattern matches', async () => {
+    const result = await scan(
+      await fixture({
+        'docs.yaml': 'exclude:\n  - drafts/**\n',
+        'index.md': '# Home\n',
+        'drafts/wip.md': '# WIP\n',
+      }),
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(result.pages.map(page => page.slug)).toEqual(['']);
+  });
+
   it('separates markdown pages from assets', async () => {
     const result = await scan(
       await fixture({

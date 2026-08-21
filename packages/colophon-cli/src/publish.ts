@@ -46,9 +46,20 @@ export interface UploadStats {
  * cannot drift into disagreeing about what is publishable.
  */
 export async function build(options: PublishOptions): Promise<BuildResult> {
-  const { config, pages, assets } = await scan(options.docsDir);
+  const {
+    config,
+    pages,
+    assets,
+    diagnostics: scanDiagnostics,
+  } = await scan(options.docsDir);
   const { nav, diagnostics: navDiagnostics } = buildNav(pages, config.nav);
   const diagnostics = [
+    // --strict means every advisory is fatal, and an unmatched exclude is an
+    // advisory like any other — a team that gates on it should not have this
+    // one class of "publishes the drafts anyway" slip through green.
+    ...scanDiagnostics.map(diagnostic =>
+      options.strict ? { ...diagnostic, level: 'error' as const } : diagnostic,
+    ),
     ...navDiagnostics,
     ...validate({ pages, assets, nav, strict: options.strict }),
   ];

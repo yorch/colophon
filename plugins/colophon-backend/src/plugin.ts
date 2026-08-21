@@ -82,9 +82,19 @@ export const colophonPlugin = createBackendPlugin({
         await scheduler.scheduleTask({
           id: 'colophon-sync-entity-links',
           ...entityLinkSchedule,
-          fn: async () => {
+          fn: async abortSignal => {
             try {
-              await syncEntityLinks({ catalog, auth, db: colophon.db, logger });
+              await syncEntityLinks({
+                catalog,
+                auth,
+                db: colophon.db,
+                logger,
+                // Without this the declared timeout only releases the task
+                // ticket: the in-flight catalog read keeps going, another
+                // worker can claim the task, and both eventually write the
+                // link table.
+                abortSignal,
+              });
             } catch (error) {
               // Caught here rather than relying on the scheduler's behaviour
               // for a rejected task, which the installed types do not state.

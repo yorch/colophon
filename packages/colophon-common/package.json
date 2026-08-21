@@ -29,6 +29,7 @@
     "dist"
   ],
   "devDependencies": {
-    "@backstage/cli": "^0.36.4"
+    "@backstage/cli": "^0.36.4",
+    "yaml": "^2.9.0"
   }
 }

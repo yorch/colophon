@@ -53,3 +53,9 @@ through `colophon:search` with an explicit `channel` filter.
 
 `colophon validate ./docs` runs the same scan and validation as `publish`
 without uploading anything. It is a good pre-commit hook.
+
+Errors always fail the run. Advisories — a missing description, a page missing
+from the nav, no landing page, an exclude pattern that matches nothing — are
+reported and tolerated, unless you pass `--strict`, which promotes all of them
+to errors. Adopt `--strict` once your docs are clean; it is the difference
+between a warning nobody reads and a gate.

@@ -2614,6 +2614,7 @@ __metadata:
   resolution: "@brnby/colophon-common@workspace:packages/colophon-common"
   dependencies:
     "@backstage/cli": "npm:^0.36.4"
+    yaml: "npm:^2.9.0"
     zod: "npm:^4.4.3"
   languageName: unknown
   linkType: soft
