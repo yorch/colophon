@@ -102,6 +102,40 @@ describe('buildNav (explicit docs.yaml nav)', () => {
     );
     expect(nav[0].title).toBe('Override');
   });
+
+  it('nests children under an entry that is itself a page', () => {
+    // A section landing page with its own sub-pages. Both levels have to stay
+    // reachable, because the orphan check runs off exactly this tree — a page
+    // that nests but is not walked would be reported as unreachable while
+    // sitting in the nav the author wrote.
+    const { nav, diagnostics } = buildNav(
+      [page({ slug: 'guides' }), page({ slug: 'guides/deploy' })],
+      [{ page: 'guides.md', children: [{ page: 'guides/deploy.md' }] }],
+    );
+    expect(diagnostics).toEqual([]);
+    expect(reachableSlugs(nav)).toEqual(new Set(['guides', 'guides/deploy']));
+  });
+
+  it('falls back to the directory tree when the declared nav is empty', () => {
+    // `nav: []` — or a nav whose every entry was commented out — is not a
+    // request for a bundle with no navigation at all, which would be an
+    // unusable one. Falling back means the pages stay reachable and the
+    // orphan check stays quiet.
+    const { nav } = buildNav([page({ slug: '' }), page({ slug: 'a' })], []);
+    expect(reachableSlugs(nav)).toEqual(new Set(['', 'a']));
+  });
+
+  it('does not confuse a nav entry with a subpath prefix', () => {
+    // `guides` and `guides-advanced` share a prefix but not a parent. Slug
+    // resolution is path-segment-based, so the second must not fold into the
+    // first.
+    const { nav, diagnostics } = buildNav(
+      [page({ slug: 'guides' }), page({ slug: 'guides-advanced' })],
+      [{ page: 'guides.md' }, { page: 'guides-advanced.md' }],
+    );
+    expect(diagnostics).toEqual([]);
+    expect(nav.map(node => node.slug)).toEqual(['guides', 'guides-advanced']);
+  });
 });
 
 describe('reachableSlugs', () => {
