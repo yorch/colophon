@@ -1,25 +1,7 @@
-import type { NavNode } from '@brnby/colophon-common';
+import { type NavNode, scopeNavigation } from '@brnby/colophon-common';
 import { pageUrl } from '../service/links';
-import { type BundleTarget, inScope, resolveTarget } from './targets';
+import { inScope, resolveTarget } from './targets';
 import { CHANNEL_HINT, type ColophonActionDeps, TARGET_HINT } from './types';
-
-/** Keeps nodes inside the target's scope, and groups that still have children. */
-function scopeNav(nodes: NavNode[], target: BundleTarget): NavNode[] {
-  const kept: NavNode[] = [];
-  for (const node of nodes) {
-    const children = node.children ? scopeNav(node.children, target) : [];
-    const selfInScope = node.slug !== undefined && inScope(target, node.slug);
-    if (!selfInScope && children.length === 0) {
-      continue;
-    }
-    kept.push({
-      title: node.title,
-      slug: selfInScope ? node.slug : undefined,
-      ...(children.length > 0 ? { children } : {}),
-    });
-  }
-  return kept;
-}
 
 /**
  * A recursive tree is rendered to an indented outline rather than returned as
@@ -90,7 +72,7 @@ export function registerListPagesAction(deps: ColophonActionDeps): void {
         input.channel,
       );
       const pages = manifest.pages.filter(page => inScope(target, page.slug));
-      const nav = scopeNav(manifest.nav, target);
+      const nav = scopeNavigation(manifest.nav, target.subpath);
 
       return {
         output: {

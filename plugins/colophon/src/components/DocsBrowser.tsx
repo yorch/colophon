@@ -1,6 +1,6 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { Box, Flex, Text } from '@backstage/ui';
-import type { NavNode } from '@brnby/colophon-common';
+import { scopeNavigation } from '@brnby/colophon-common';
 import {
   ColophonComponentsProvider,
   ColophonMarkdown,
@@ -84,7 +84,7 @@ export function DocsBrowser({
   }, [api, bundleId, channel]);
 
   const nav = useMemo(
-    () => scopeNav(resolved?.manifest.nav ?? [], subpath),
+    () => scopeNavigation(resolved?.manifest.nav ?? [], subpath),
     [resolved, subpath],
   );
 
@@ -199,31 +199,4 @@ export function DocsBrowser({
       )}
     </Flex>
   );
-}
-
-/** Narrows the nav tree to the subtree an entity is scoped to. */
-function scopeNav(nodes: NavNode[], subpath?: string): NavNode[] {
-  if (!subpath) {
-    return nodes;
-  }
-  const found = findNode(nodes, subpath);
-  if (found) {
-    return found.children ?? [found];
-  }
-  // No matching node means the shared bundle has no section for this entity;
-  // showing the whole tree would be worse than showing nothing.
-  return [];
-}
-
-function findNode(nodes: NavNode[], slug: string): NavNode | undefined {
-  for (const node of nodes) {
-    if (node.slug === slug) {
-      return node;
-    }
-    const nested = node.children && findNode(node.children, slug);
-    if (nested) {
-      return nested;
-    }
-  }
-  return undefined;
 }

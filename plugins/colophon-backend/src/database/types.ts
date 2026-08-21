@@ -1,4 +1,4 @@
-import type { DocStatus, DocType } from '@brnby/colophon-common';
+import type { DocStatus, DocType, SearchHit } from '@brnby/colophon-common';
 
 export interface RevisionRecord {
   revisionId: string;
@@ -72,6 +72,18 @@ export interface ChunkSearchHit extends ChunkRecord {
   score: number;
   page: Pick<PageRecord, 'title' | 'description' | 'type' | 'status' | 'tags'>;
 }
+
+/**
+ * Fails the build if what the search endpoint sends stops matching the wire
+ * type its clients read. The two were declared independently once and had
+ * already drifted; this is what makes a future divergence a compile error
+ * rather than an undefined field at runtime.
+ */
+type AssertAssignable<T extends U, U> = T;
+export type ChunkSearchHitIsWireCompatible = AssertAssignable<
+  ChunkSearchHit,
+  SearchHit
+>;
 
 export interface ChunkSearchResult {
   hits: ChunkSearchHit[];

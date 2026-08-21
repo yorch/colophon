@@ -6,10 +6,12 @@
  * package as the place where compatibility is decided.
  */
 
+export * from './api';
 export * from './chunks';
 export * from './config';
 export * from './frontmatter';
 export * from './ids';
 export * from './manifest';
+export * from './navigation';
 export * from './references';
 export * from './storage';
