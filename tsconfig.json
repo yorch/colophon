@@ -1,9 +1,23 @@
+// jsx is overridden to "react-jsx" (automatic runtime). @backstage/cli's
+// tsconfig still sets the classic "react", but that only ever affected
+// typechecking — it is emitDeclarationOnly, and the real JS comes from
+// rollup/esbuild, which emits `import { jsx } from 'react/jsx-runtime'`
+// (verified against @backstage/core-components' own dist). The Jest
+// transform likewise runs runtime: 'automatic'. Leaving it classic forces a
+// redundant `import React` into every .tsx that Biome then flags as unused.
 {
   "extends": "@backstage/cli/config/tsconfig.json",
-  "include": ["packages", "plugins", "dev-app"],
-  "exclude": ["node_modules"],
+  "include": [
+    "packages",
+    "plugins",
+    "dev-app"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
   "compilerOptions": {
     "outDir": "dist-types",
-    "rootDir": "."
+    "rootDir": ".",
+    "jsx": "react-jsx"
   }
 }
