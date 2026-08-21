@@ -1,0 +1,53 @@
+# Example Colophon configuration.
+#
+# Merge the relevant sections into your Backstage app-config.yaml. Every key
+# is documented in docs/reference/configuration.md.
+
+colophon:
+  storage:
+    type: s3
+    s3:
+      bucket: ${COLOPHON_BUCKET}
+      region: ${AWS_REGION}
+    # For local development, prefer:
+    # type: local
+    # local:
+    #   directory: ./colophon-data
+
+  retention:
+    # Revisions a channel points at are never collected. Beyond those, this
+    # many recent revisions per channel are retained.
+    revisionsPerChannel: 10
+
+  chunking:
+    # Applied at index time, so changing these re-chunks on the next run
+    # without any repository re-running its CI.
+    splitDepths: [2, 3]
+    maxChars: 1500
+    minChars: 200
+
+  schedule:
+    frequency: { minutes: 10 }
+    timeout: { minutes: 15 }
+
+# Expose Colophon's actions to AI agents through the MCP Actions Backend.
+backend:
+  actions:
+    pluginSources:
+      - colophon
+      - catalog
+
+mcpActions:
+  servers:
+    colophon:
+      name: Colophon Documentation
+      filter:
+        include:
+          - id: 'colophon:*'
+
+# Per-user OAuth for MCP clients, so an agent sees exactly the documentation
+# the developer running it is allowed to see. For service agents, use
+# backend.auth.externalAccess with a static token instead.
+auth:
+  clientIdMetadataDocuments:
+    enabled: true
