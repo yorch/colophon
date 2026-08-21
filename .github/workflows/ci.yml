@@ -12,6 +12,27 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    # The production full-text path is Postgres-only — tsvector, ts_rank and a
+    # GIN index. Without a real server the database suite runs against SQLite
+    # alone and that SQL ships unexercised, so CI provides one.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: colophon_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      BACKSTAGE_TEST_DATABASE_POSTGRES18_CONNECTION_STRING: postgresql://postgres:postgres@localhost:5432/colophon_test
+
     steps:
       - uses: actions/checkout@v7
 
