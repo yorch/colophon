@@ -31,6 +31,7 @@
     "@backstage/plugin-catalog-node": "^2.2.3",
     "@backstage/plugin-permission-common": "^0.9.10",
     "@backstage/plugin-permission-node": "^0.11.2",
+    "@backstage/plugin-search-backend-node": "^1.4.7",
     "@backstage/plugin-search-common": "^1.2.24",
     "@brnby/colophon-common": "workspace:^",
     "express": "^4.22.0",
