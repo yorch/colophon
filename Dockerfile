@@ -28,8 +28,14 @@ COPY tsconfig.json ./
 COPY packages/colophon-common packages/colophon-common
 COPY packages/colophon-cli packages/colophon-cli
 
+# Build, then prepack. prepack rewrites each package.json's `main` and
+# `types` from the src entrypoints used in development to the dist ones, which
+# is what makes the built CLI resolve @brnby/colophon-common to dist rather
+# than to TypeScript source that Node cannot load.
 RUN yarn workspace @brnby/colophon-common run build \
- && yarn workspace @brnby/colophon-cli run build
+ && yarn workspace @brnby/colophon-cli run build \
+ && yarn workspace @brnby/colophon-common run prepack \
+ && yarn workspace @brnby/colophon-cli run prepack
 
 # Drop dev dependencies from the tree that gets copied forward.
 RUN yarn workspaces focus --production --all
