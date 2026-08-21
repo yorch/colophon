@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>For agents — Colophon</title>
+    <meta
+      name="description"
+      content="Colophon's MCP surface: four read-only actions that return Markdown, registered with Backstage's Actions Registry and exposed through the MCP Actions Backend."
+    />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="index.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span>Colophon</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="architecture.html">Architecture</a></li>
+            <li><a href="implementation.html">Implementation</a></li>
+            <li><a href="agents.html" aria-current="page">For agents</a></li>
+            <li><a href="getting-started.html">Getting started</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="shell">
+        <article class="doc">
+          <p class="eyebrow">For agents · MCP</p>
+          <h1>Four read-only actions, returning Markdown</h1>
+          <p class="lead">
+            The agent-facing surface is not a second product. It is the same index the portal
+            reads, exposed through Backstage's own MCP plumbing, returning the same Markdown
+            an author wrote.
+          </p>
+
+          <!-- ------------------------------------------------ 01 plumbing -->
+          <section class="section" id="plumbing" aria-labelledby="plumbing-h">
+            <p class="eyebrow">01</p>
+            <h2 id="plumbing-h">There is no bespoke MCP server here</h2>
+            <p>
+              Colophon registers four actions with Backstage's Actions Registry. The MCP
+              Actions Backend does the rest: transport, session handling, authentication,
+              and which actions a given server exposes. Writing a standalone MCP server
+              would have meant re-implementing all of that, and re-implementing the auth
+              part badly.
+            </p>
+
+            <figure class="figure bleed">
+              <div class="figure-scroll">
+                <svg
+                  class="diagram diagram--wide"
+                  viewBox="0 0 960 290"
+                  role="img"
+                  aria-labelledby="mcp-title mcp-desc"
+                >
+                  <title id="mcp-title">How an agent reaches Colophon's actions</title>
+                  <desc id="mcp-desc">
+                    A coding agent acting as an MCP client talks to Backstage's MCP Actions
+                    Backend, which handles transport, authentication and filtering. That
+                    backend reads from the Actions Registry, where plugins register their
+                    actions. Colophon contributes four of them: colophon:list-entities,
+                    colophon:list-pages, colophon:search and colophon:get-page. All four
+                    read from the same Postgres index and object storage the portal uses.
+                  </desc>
+                  <defs>
+                    <marker id="mcp-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head" />
+                    </marker>
+                  </defs>
+
+                  <text class="t-accent" x="726" y="10">REGISTERED BY COLOPHON</text>
+
+                  <rect class="node" x="16" y="80" width="170" height="80" rx="7" />
+                  <text class="t" x="101" y="112" text-anchor="middle">Coding agent</text>
+                  <text class="t-sub" x="101" y="131" text-anchor="middle">MCP client</text>
+
+                  <path class="edge" d="M190,120 H222" marker-end="url(#mcp-head)" />
+
+                  <rect class="node-alt" x="226" y="80" width="230" height="80" rx="7" />
+                  <text class="t" x="341" y="112" text-anchor="middle">MCP Actions Backend</text>
+                  <text class="t-sub" x="341" y="131" text-anchor="middle">transport · auth · filtering</text>
+
+                  <path class="edge" d="M460,120 H492" marker-end="url(#mcp-head)" />
+
+                  <rect class="node-alt" x="496" y="80" width="190" height="80" rx="7" />
+                  <text class="t" x="591" y="112" text-anchor="middle">Actions Registry</text>
+                  <text class="t-sub" x="591" y="131" text-anchor="middle">plugin-contributed</text>
+
+                  <path class="edge" d="M690,120 C 704,120 704,36 720,36" marker-end="url(#mcp-head)" />
+                  <path class="edge" d="M690,120 C 704,120 704,84 720,84" marker-end="url(#mcp-head)" />
+                  <path class="edge" d="M690,120 C 704,120 704,132 720,132" marker-end="url(#mcp-head)" />
+                  <path class="edge" d="M690,120 C 704,120 704,180 720,180" marker-end="url(#mcp-head)" />
+
+                  <rect class="node-accent" x="726" y="16" width="218" height="40" rx="6" />
+                  <text class="t-mono" x="835" y="41" text-anchor="middle">colophon:list-entities</text>
+
+                  <rect class="node-accent" x="726" y="64" width="218" height="40" rx="6" />
+                  <text class="t-mono" x="835" y="89" text-anchor="middle">colophon:list-pages</text>
+
+                  <rect class="node-accent" x="726" y="112" width="218" height="40" rx="6" />
+                  <text class="t-mono" x="835" y="137" text-anchor="middle">colophon:search</text>
+
+                  <rect class="node-accent" x="726" y="160" width="218" height="40" rx="6" />
+                  <text class="t-mono" x="835" y="185" text-anchor="middle">colophon:get-page</text>
+
+                  <path class="edge" d="M835,204 V 224" marker-end="url(#mcp-head)" />
+
+                  <rect class="node" x="496" y="228" width="448" height="52" rx="7" />
+                  <text class="t" x="720" y="252" text-anchor="middle">Postgres index · object storage</text>
+                  <text class="t-sub" x="720" y="269" text-anchor="middle">the same source the portal reads</text>
+                </svg>
+              </div>
+              <figcaption>
+                Colophon supplies the four boxes on the right. Everything to their left is
+                Backstage, configured rather than written.
+              </figcaption>
+            </figure>
+
+            <p>
+              All four actions declare <code>readOnly</code> and <code>idempotent</code>.
+              Nothing an agent can call here mutates a bundle, a channel, or the index.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------- 02 actions -->
+          <section class="section" id="actions" aria-labelledby="actions-h">
+            <p class="eyebrow">02</p>
+            <h2 id="actions-h">The surface</h2>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Action</th>
+                    <th scope="col">Returns</th>
+                    <th scope="col">Reached for when</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row"><code>colophon:list-entities</code></th>
+                    <td>
+                      Catalog entities that have documentation, the bundle each points at,
+                      its channels, and a portal URL.
+                    </td>
+                    <td>
+                      Orientation. Without it an agent has to guess whether a component has
+                      docs at all, which usually means a wasted search.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>colophon:list-pages</code></th>
+                    <td>
+                      The navigation tree as an indented outline, plus a page index with
+                      slugs, types, tags and status.
+                    </td>
+                    <td>
+                      Before searching, when the shape of the corpus is unknown. Far cheaper
+                      than guessing at search terms.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>colophon:search</code></th>
+                    <td>
+                      Ranked <em>sections</em> — not whole pages — each with its heading
+                      trail, its slug and anchor, and a citable portal URL.
+                    </td>
+                    <td>
+                      The default entry point. Narrows by entity, bundle, Diátaxis type,
+                      tags and channel.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>colophon:get-page</code></th>
+                    <td>
+                      One page in full as raw Markdown — or just one section, if an anchor
+                      is supplied.
+                    </td>
+                    <td>
+                      After a search or a listing returns a promising slug.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p>
+              An action's description is the only thing a model reads before deciding whether
+              to call it, so those descriptions are written as carefully as the code. The
+              search description has to say what a "chunk" is, why the breadcrumb is there,
+              and that the results are citable — a model choosing between this and a generic
+              web search decides on those few sentences alone.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------ 03 markdown -->
+          <section class="section" id="markdown" aria-labelledby="markdown-h">
+            <p class="eyebrow">03</p>
+            <h2 id="markdown-h">Markdown, never HTML</h2>
+            <p>
+              This is the whole reason the plugin stores Markdown as its canonical artifact.
+              An agent asked to reason about a configuration table or reproduce a code
+              sample should not have to unpick a rendered DOM first — and rendered
+              documentation DOMs are hostile: syntax-highlighting spans threaded through
+              every token, tables expressed as nested containers, anchors injected beside
+              every heading.
+            </p>
+            <p>
+              Keeping the wire format identical to the stored format also means there is one
+              format to get right. The frontend's API client returns pages as Markdown too,
+              for the same reason.
+            </p>
+          </section>
+
+          <!-- ----------------------------------------------- 04 behaviour -->
+          <section class="section" id="behaviour" aria-labelledby="behaviour-h">
+            <p class="eyebrow">04</p>
+            <h2 id="behaviour-h">Designed for how agents actually fail</h2>
+
+            <h3>Truncation is stated, never silent</h3>
+            <p>
+              Every paginated response carries <code>total</code>, <code>returned</code>,
+              <code>remaining</code>, a <code>nextOffset</code> when there is more, and a
+              plain-language <code>note</code> saying so. An agent that does not know its
+              results were cut will confidently answer from a third of them.
+            </p>
+
+            <h3>The nav tree arrives as an outline, not as nested JSON</h3>
+            <p>
+              <code>colophon:list-pages</code> renders the recursive navigation to an
+              indented Markdown list. Agents read it in one glance, it survives JSON-schema
+              conversion without a self-referential <code>$ref</code>, and it costs a
+              fraction of the tokens the nested structure would.
+            </p>
+
+            <h3>Scope is enforced, not advisory</h3>
+            <p>
+              When an entity is scoped to a subtree with the <code>#subpath</code> form of
+              the annotation, both the page index and the navigation tree are filtered to
+              that subtree, and a <code>get-page</code> for a slug outside it returns not
+              found. One monorepo docs tree can serve many components without any of them
+              being able to read the others' pages by guessing a slug.
+            </p>
+
+            <h3>Anchors keep the context bill down</h3>
+            <p>
+              <code>get-page</code> accepts the anchor that <code>search</code> just
+              returned and gives back only that section, flagged with
+              <code>partial: true</code>. The <code>status</code> field is documented in the
+              schema as something the agent must surface: a
+              <code>draft</code> or <code>deprecated</code> page has to be flagged to the
+              user rather than quietly answered from.
+            </p>
+          </section>
+
+          <!-- --------------------------------------------- 05 interaction -->
+          <section class="section" id="interaction" aria-labelledby="interaction-h">
+            <p class="eyebrow">05</p>
+            <h2 id="interaction-h">A typical sequence</h2>
+            <p>
+              Orient, narrow, read. The listing actions exist so that the search does not
+              have to carry the whole job.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>Illustrative — real action names and fields, invented content</figcaption>
+              <pre><code><span class="cm">▸ colophon:list-entities</span>
+  {}
+  → payments-api  github.com/brnby/payments-api            channels: latest, 1.x
+    billing       github.com/brnby/platform#services/billing  channels: latest
+    note: "Showing all 2 entities."
+
+<span class="cm">▸ colophon:search</span>
+  { "query": "rotate database credentials",
+    "entityRefs": ["component:default/payments-api"],
+    "type": "how-to" }
+  → breadcrumb: ["Payments API", "Operations", "Rotating credentials"]
+    slug:   "operations/credentials"
+    anchor: "rotating-credentials"
+    url:    "https://backstage.example.com/catalog/default/component/payments-api/docs/…"
+    text:   "## Rotating credentials\n\nCredentials are issued by …"
+    note: "Showing all 3 matches."
+
+<span class="cm">▸ colophon:get-page</span>
+  { "entityRef": "component:default/payments-api",
+    "slug": "operations/credentials",
+    "anchor": "rotating-credentials" }
+  → status:   "current"
+    partial:  true
+    markdown: "## Rotating credentials\n\n1. Request a new secret …"</code></pre>
+            </figure>
+            <p class="small muted">
+              The sequence above is written to show the shape of the exchange. The action
+              names, parameters and output fields are the ones the backend really declares;
+              the entities, pages and text are made up, because there is no running instance
+              to draw them from.
+            </p>
+          </section>
+
+          <!-- ---------------------------------------------------- 06 auth -->
+          <section class="section" id="auth" aria-labelledby="auth-h">
+            <p class="eyebrow">06</p>
+            <h2 id="auth-h">An agent sees what its user sees</h2>
+            <p>
+              Because the actions run inside Backstage rather than beside it, they inherit
+              Backstage's identity model. Enabling per-user OAuth for MCP clients means a
+              developer's agent retrieves exactly the documentation that developer is
+              allowed to read — not a service account's view of the catalog.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>app-config.yaml</figcaption>
+              <pre><code>backend:
+  actions:
+    pluginSources: [colophon, catalog]
+
+mcpActions:
+  servers:
+    colophon:
+      name: Colophon Documentation
+      filter:
+        include:
+          - id: 'colophon:*'
+
+<span class="cm"># Per-user OAuth for MCP clients. For service agents, use</span>
+<span class="cm"># backend.auth.externalAccess with a static token instead.</span>
+auth:
+  clientIdMetadataDocuments:
+    enabled: true</code></pre>
+            </figure>
+
+            <p class="note">
+              <strong>Exposure is configured, not coded.</strong> Colophon registers its
+              actions with the registry; which of them any MCP server exposes is decided by
+              the <code>mcpActions</code> filter. Narrowing an organisation's agents to
+              <code>colophon:search</code> and <code>colophon:get-page</code> is a config
+              change, not a fork.
+            </p>
+          </section>
+
+          <nav class="pager bleed" aria-label="Page navigation">
+            <a href="implementation.html">
+              <span class="eyebrow" style="display: block">Previous</span>
+              ← Implementation
+            </a>
+            <a href="getting-started.html">
+              <span class="eyebrow" style="display: block">Next</span>
+              Getting started →
+            </a>
+          </nav>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <p>
+          <strong>Colophon</strong> — Apache-2.0. Early development; the bundle contract is
+          not yet stable. Everything on this site is drawn from the repository itself.
+        </p>
+        <p class="small">
+          <a href="index.html">Overview</a> ·
+          <a href="architecture.html">Architecture</a> ·
+          <a href="implementation.html">Implementation</a> ·
+          <a href="getting-started.html">Getting started</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

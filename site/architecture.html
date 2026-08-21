@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture — Colophon</title>
+    <meta
+      name="description"
+      content="How a docs directory becomes a bundle: the publish pipeline, the object-storage and Postgres split, and why revisions are immutable while channels are mutable pointers."
+    />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="index.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span>Colophon</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="architecture.html" aria-current="page">Architecture</a></li>
+            <li><a href="implementation.html">Implementation</a></li>
+            <li><a href="agents.html">For agents</a></li>
+            <li><a href="getting-started.html">Getting started</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="shell">
+        <article class="doc">
+          <p class="eyebrow">Architecture</p>
+          <h1>How a docs directory becomes a bundle</h1>
+          <p class="lead">
+            The pipeline is shaped by two decisions: store Markdown rather than HTML, and
+            keep routing out of the stored artifact. Everything below follows from those.
+          </p>
+
+          <!-- ------------------------------------------------ 01 pipeline -->
+          <section class="section" id="pipeline" aria-labelledby="pipeline-h">
+            <p class="eyebrow">01</p>
+            <h2 id="pipeline-h">The pipeline</h2>
+            <p>
+              CI publishes; the backend ingests; three surfaces read the index. Each stage
+              hands the next a smaller, more structured artifact than it received.
+            </p>
+
+            <figure class="figure bleed">
+              <div class="figure-scroll">
+                <svg
+                  class="diagram diagram--wide"
+                  viewBox="0 0 1120 230"
+                  role="img"
+                  aria-labelledby="arc-pipe-title arc-pipe-desc"
+                >
+                  <title id="arc-pipe-title">The Colophon publish and serve pipeline</title>
+                  <desc id="arc-pipe-desc">
+                    Five stages left to right: the repository's docs Markdown files; CI
+                    running colophon publish; object storage holding content-addressed
+                    blobs and per-revision manifests; the Backstage backend which ingests
+                    and chunks; and a Postgres index of navigation, pages and chunks. The
+                    index fans out to three consumers: the frontend, the search collator,
+                    and the MCP actions.
+                  </desc>
+                  <defs>
+                    <marker id="arc-pipe-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head" />
+                    </marker>
+                  </defs>
+
+                  <rect class="node" x="8" y="72" width="132" height="76" rx="7" />
+                  <text class="t" x="74" y="101" text-anchor="middle">Repository</text>
+                  <text class="t-mono" x="74" y="120" text-anchor="middle">docs/**/*.md</text>
+
+                  <path class="edge" d="M144,110 H162" marker-end="url(#arc-pipe-head)" />
+
+                  <rect class="node-accent" x="168" y="72" width="150" height="76" rx="7" />
+                  <text class="t" x="243" y="101" text-anchor="middle">CI</text>
+                  <text class="t-mono" x="243" y="120" text-anchor="middle">colophon publish</text>
+
+                  <path class="edge" d="M322,110 H340" marker-end="url(#arc-pipe-head)" />
+
+                  <rect class="node" x="346" y="72" width="158" height="76" rx="7" />
+                  <text class="t" x="425" y="101" text-anchor="middle">Object storage</text>
+                  <text class="t-mono" x="425" y="120" text-anchor="middle">blobs/ · bundles/</text>
+
+                  <path class="edge" d="M508,110 H526" marker-end="url(#arc-pipe-head)" />
+
+                  <rect class="node" x="532" y="72" width="158" height="76" rx="7" />
+                  <text class="t" x="611" y="101" text-anchor="middle">Backend</text>
+                  <text class="t-sub" x="611" y="120" text-anchor="middle">ingest · chunk</text>
+
+                  <path class="edge" d="M694,110 H712" marker-end="url(#arc-pipe-head)" />
+
+                  <rect class="node-alt" x="718" y="72" width="150" height="76" rx="7" />
+                  <text class="t" x="793" y="101" text-anchor="middle">Postgres index</text>
+                  <text class="t-sub" x="793" y="120" text-anchor="middle">nav · pages · chunks</text>
+
+                  <path class="edge" d="M872,110 C 882,110 882,44 890,44" marker-end="url(#arc-pipe-head)" />
+                  <path class="edge" d="M872,110 H890" marker-end="url(#arc-pipe-head)" />
+                  <path class="edge" d="M872,110 C 882,110 882,176 890,176" marker-end="url(#arc-pipe-head)" />
+
+                  <rect class="node" x="896" y="17" width="216" height="54" rx="7" />
+                  <text class="t" x="1004" y="40" text-anchor="middle">Frontend</text>
+                  <text class="t-sub" x="1004" y="57" text-anchor="middle">React + remark/rehype</text>
+
+                  <rect class="node" x="896" y="83" width="216" height="54" rx="7" />
+                  <text class="t" x="1004" y="106" text-anchor="middle">Search collator</text>
+                  <text class="t-sub" x="1004" y="123" text-anchor="middle">portal-wide search</text>
+
+                  <rect class="node" x="896" y="149" width="216" height="54" rx="7" />
+                  <text class="t" x="1004" y="172" text-anchor="middle">MCP actions</text>
+                  <text class="t-sub" x="1004" y="189" text-anchor="middle">via Actions Registry</text>
+                </svg>
+              </div>
+              <figcaption>The pipeline, stage by stage.</figcaption>
+            </figure>
+
+            <dl class="kv">
+              <dt>publish</dt>
+              <dd>
+                Scan, validate, assemble a manifest, upload the blobs it references, then
+                write the manifest. <code>validate</code> and <code>publish</code> share one
+                code path, so they cannot drift into disagreeing about what is publishable.
+              </dd>
+              <dt>register</dt>
+              <dd>
+                CI tells the backend a revision exists and which channel should point at it.
+                This is the only mutating call in the whole system that CI makes.
+              </dd>
+              <dt>ingest</dt>
+              <dd>
+                The backend reads the manifest from storage, records the revision and its
+                pages, and — only if a channel points at it — reads every page blob and cuts
+                retrieval chunks.
+              </dd>
+              <dt>serve</dt>
+              <dd>
+                The HTTP router, the search collator, and the MCP actions all read the same
+                index. There is no second source of truth for any of them.
+              </dd>
+            </dl>
+          </section>
+
+          <!-- ------------------------------------------------- 02 storage -->
+          <section class="section" id="storage" aria-labelledby="storage-h">
+            <p class="eyebrow">02</p>
+            <h2 id="storage-h">Two storage systems, split by artifact type</h2>
+            <p>
+              The split is not a deployment convenience. The two kinds of artifact have
+              opposite properties, and forcing either into the other's store makes something
+              expensive.
+            </p>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col"></th>
+                    <th scope="col">Object storage</th>
+                    <th scope="col">Postgres</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Holds</th>
+                    <td>Markdown bodies, images, attachments</td>
+                    <td>Manifests, nav, pages, chunks, channels, entity links</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Shape</th>
+                    <td>Large, immutable, content-addressed</td>
+                    <td>Small, relational, constantly queried</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Written by</th>
+                    <td>CI, once per new blob, never again</td>
+                    <td>The backend, on every ingest and channel move</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Key</th>
+                    <td><code>blobs/&lt;ab&gt;/&lt;sha256&gt;</code></td>
+                    <td>Revision id, bundle id, slug</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p>
+              Content-addressing is what makes retained history affordable. Every page body
+              and every asset is stored once, under the sha-256 of its bytes, and shared by
+              every revision that references it.
+            </p>
+
+            <figure class="figure bleed">
+              <div class="figure-scroll">
+                <svg
+                  class="diagram"
+                  viewBox="0 0 820 272"
+                  role="img"
+                  aria-labelledby="arc-blob-title arc-blob-desc"
+                >
+                  <title id="arc-blob-title">Two revisions sharing content-addressed blobs</title>
+                  <desc id="arc-blob-desc">
+                    Two revision manifests on the left — one built from the main branch, one
+                    from release-1.x — both reference the same two blobs holding
+                    architecture.md and guides/publishing.md. Each also references its own
+                    distinct copy of reference/configuration.md. The shared blobs are stored
+                    once, not twice.
+                  </desc>
+                  <defs>
+                    <marker id="arc-blob-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head" />
+                    </marker>
+                  </defs>
+
+                  <text class="t-accent" x="16" y="16">MANIFESTS</text>
+                  <text class="t-accent" x="456" y="16">BLOB STORE — KEYED blobs/&lt;ab&gt;/&lt;sha256&gt;</text>
+
+                  <rect class="node" x="16" y="40" width="200" height="76" rx="7" />
+                  <text class="t" x="116" y="70" text-anchor="middle">revision</text>
+                  <text class="t-mono" x="116" y="89" text-anchor="middle">source.ref = main</text>
+
+                  <rect class="node" x="16" y="176" width="200" height="76" rx="7" />
+                  <text class="t" x="116" y="206" text-anchor="middle">revision</text>
+                  <text class="t-mono" x="116" y="225" text-anchor="middle">source.ref = release-1.x</text>
+
+                  <path class="edge" d="M220,78 C 320,78 350,50 452,50" marker-end="url(#arc-blob-head)" />
+                  <path class="edge" d="M220,78 C 320,78 350,110 452,110" marker-end="url(#arc-blob-head)" />
+                  <path class="edge" d="M220,78 C 330,78 350,170 452,170" marker-end="url(#arc-blob-head)" />
+
+                  <path class="edge" d="M220,214 C 320,214 350,50 452,50" marker-end="url(#arc-blob-head)" />
+                  <path class="edge" d="M220,214 C 320,214 350,110 452,110" marker-end="url(#arc-blob-head)" />
+                  <path class="edge" d="M220,214 C 330,214 350,230 452,230" marker-end="url(#arc-blob-head)" />
+
+                  <rect class="node-accent" x="456" y="32" width="340" height="36" rx="6" />
+                  <text class="t-mono" x="472" y="54">architecture.md</text>
+                  <text class="t-accent" x="780" y="54" text-anchor="end">SHARED</text>
+
+                  <rect class="node-accent" x="456" y="92" width="340" height="36" rx="6" />
+                  <text class="t-mono" x="472" y="114">guides/publishing.md</text>
+                  <text class="t-accent" x="780" y="114" text-anchor="end">SHARED</text>
+
+                  <rect class="node" x="456" y="152" width="340" height="36" rx="6" />
+                  <text class="t-mono" x="472" y="174">reference/configuration.md</text>
+                  <text class="t-sub" x="780" y="174" text-anchor="end">main only</text>
+
+                  <rect class="node" x="456" y="212" width="340" height="36" rx="6" />
+                  <text class="t-mono" x="472" y="234">reference/configuration.md</text>
+                  <text class="t-sub" x="780" y="234" text-anchor="end">1.x only</text>
+                </svg>
+              </div>
+              <figcaption>
+                Two revisions of one bundle. The pages they share (highlighted) are stored
+                once; only the page that actually differs costs a second blob. Illustrative
+                — the paths are this repository's, the arrangement is drawn for the
+                explanation.
+              </figcaption>
+            </figure>
+
+            <p>
+              The two-character fan-out prefix in the key is there so that no single prefix
+              accumulates the entire corpus, which matters for listing performance and for
+              backends that shard on key prefix.
+            </p>
+          </section>
+
+          <!-- --------------------------------------- 03 revisions/channels -->
+          <section class="section" id="revisions" aria-labelledby="revisions-h">
+            <p class="eyebrow">03</p>
+            <h2 id="revisions-h">Revisions are content; channels are routing</h2>
+            <p>
+              A <strong>revision</strong> is an immutable snapshot, identified by the sha-256
+              of its manifest. A <strong>channel</strong> is a mutable named pointer —
+              <code>latest</code>, <code>1.x</code>, <code>pr-42</code>. CI publishes a
+              revision, then repoints a channel at it.
+            </p>
+            <p>
+              The channel is deliberately <em>absent</em> from the manifest. A manifest
+              describes content; a channel describes where readers are sent. Keeping the two
+              apart is what makes the next three properties fall out for free.
+            </p>
+
+            <figure class="figure bleed">
+              <div class="figure-scroll">
+                <svg
+                  class="diagram diagram--wide"
+                  viewBox="0 0 960 250"
+                  role="img"
+                  aria-labelledby="arc-chan-title arc-chan-desc"
+                >
+                  <title id="arc-chan-title">Channels as mutable pointers at immutable revisions</title>
+                  <desc id="arc-chan-desc">
+                    Four immutable revisions sit in a row in publication order. Above them,
+                    three channel pointers: 1.x points at the first revision, pr-42 points
+                    at the third, and latest points at the fourth and most recent. A dashed
+                    arrow shows latest being repointed backwards at the second revision —
+                    a rollback performed as a pointer move, with no rebuild and no new
+                    upload.
+                  </desc>
+                  <defs>
+                    <marker id="arc-chan-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head" />
+                    </marker>
+                    <marker id="arc-chan-head-a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head-accent" />
+                    </marker>
+                  </defs>
+
+                  <text class="t-accent" x="20" y="18">CHANNELS — MUTABLE</text>
+                  <text class="t-accent" x="20" y="238">REVISIONS — IMMUTABLE, IN PUBLICATION ORDER →</text>
+
+                  <rect class="node-alt" x="70" y="36" width="90" height="36" rx="18" />
+                  <text class="t-mono" x="115" y="59" text-anchor="middle">1.x</text>
+
+                  <rect class="node-accent" x="490" y="36" width="90" height="36" rx="18" />
+                  <text class="t-mono" x="535" y="59" text-anchor="middle">latest</text>
+
+                  <rect class="node-alt" x="700" y="36" width="90" height="36" rx="18" />
+                  <text class="t-mono" x="745" y="59" text-anchor="middle">pr-42</text>
+
+                  <path class="edge" d="M115,74 V134" marker-end="url(#arc-chan-head)" />
+                  <path class="edge edge-accent" d="M535,74 V134" marker-end="url(#arc-chan-head-a)" />
+                  <path class="edge" d="M745,74 V134" marker-end="url(#arc-chan-head)" />
+
+                  <path
+                    class="edge edge-accent edge-dash"
+                    d="M488,54 C 420,54 372,84 328,132"
+                    marker-end="url(#arc-chan-head-a)"
+                  />
+                  <text class="t-accent" x="318" y="100" text-anchor="end">ROLLBACK — POINTER MOVE</text>
+
+                  <rect class="node" x="20" y="140" width="190" height="68" rx="7" />
+                  <text class="t-mono" x="115" y="168" text-anchor="middle">a17f0c92…</text>
+                  <text class="t-sub" x="115" y="186" text-anchor="middle">1.x · 8e21b0c</text>
+
+                  <rect class="node" x="230" y="140" width="190" height="68" rx="7" />
+                  <text class="t-mono" x="325" y="168" text-anchor="middle">7f3ce014…</text>
+                  <text class="t-sub" x="325" y="186" text-anchor="middle">main · 3d9f214</text>
+
+                  <rect class="node" x="440" y="140" width="190" height="68" rx="7" />
+                  <text class="t-mono" x="535" y="168" text-anchor="middle">c25e73f7…</text>
+                  <text class="t-sub" x="535" y="186" text-anchor="middle">main · 4c47e41</text>
+
+                  <rect class="node" x="650" y="140" width="190" height="68" rx="7" />
+                  <text class="t-mono" x="745" y="168" text-anchor="middle">9d10ab4c…</text>
+                  <text class="t-sub" x="745" y="186" text-anchor="middle">pr-42 · 55c1e8a</text>
+                </svg>
+              </div>
+              <figcaption>
+                Revision ids are the abbreviated sha-256 of the manifest. Of the four shown,
+                <code>c25e73f7…</code> at commit <code>4c47e41</code> is the one the publish
+                on the home page actually produced; the rest are drawn to illustrate the
+                arrangement.
+              </figcaption>
+            </figure>
+
+            <h3>Rollback is a pointer move</h3>
+            <p>
+              A bad docs deploy is repaired by pointing <code>latest</code> at the previous
+              revision. No rebuild, no re-upload, no CI run, and nothing about the bad
+              revision is destroyed — it stays addressable for anyone who wants to look at
+              what went wrong.
+            </p>
+
+            <h3>Release branches dedupe against each other</h3>
+            <p>
+              Map a release branch onto a channel and the two lines of documentation share
+              every page they have in common. Keeping five supported versions online costs
+              five manifests plus the blobs that genuinely differ.
+            </p>
+
+            <h3>PR previews are throwaway channels</h3>
+            <p>
+              A pull request publishes to <code>pr-42</code> and never touches
+              <code>latest</code>. When the branch is deleted the channel goes with it, and
+              retention reclaims the revisions nothing points at.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------ 04 indexing -->
+          <section class="section" id="indexing" aria-labelledby="indexing-h">
+            <p class="eyebrow">04</p>
+            <h2 id="indexing-h">Indexing discipline</h2>
+            <p>
+              Two rules keep the index from growing in proportion to how often CI runs
+              rather than to how much documentation exists.
+            </p>
+            <p>
+              <strong>Only channel-pointed revisions are chunked.</strong> Chunking is the
+              expensive step — it reads every page blob in the revision. A revision that is
+              published and never pointed at costs a few index rows, not a full pass over
+              the corpus.
+            </p>
+            <p>
+              <strong>Only the default channel projects into Backstage Search.</strong>
+              Otherwise the portal search box returns the same page once per supported
+              version, and the more carefully a team maintains its release branches the
+              worse their search gets. Other channels stay reachable through the version
+              picker and through <code>colophon:search</code> with an explicit
+              <code>channel</code> filter.
+            </p>
+            <p>
+              Retention closes the loop. Revisions a channel points at are never collected;
+              beyond those, the most recent <code>revisionsPerChannel</code> per channel are
+              kept and the rest become eligible for garbage collection.
+            </p>
+          </section>
+
+          <!-- -------------------------------------------- 05 write order -->
+          <section class="section" id="ordering" aria-labelledby="ordering-h">
+            <p class="eyebrow">05</p>
+            <h2 id="ordering-h">The manifest is written last</h2>
+            <p>
+              Blobs go up first; the manifest goes up only once they are all present. Until
+              the manifest exists the revision is not readable, so a crash halfway through
+              an upload leaves orphaned blobs — which retention will collect — rather than a
+              revision that resolves to a page whose body was never stored.
+            </p>
+            <p>
+              This is the same reason the revision id excludes the timestamp: a partially
+              uploaded revision that is retried produces the same id and the same keys, so
+              the retry completes the original rather than starting a parallel one.
+            </p>
+          </section>
+
+          <nav class="pager bleed" aria-label="Page navigation">
+            <a href="index.html">
+              <span class="eyebrow" style="display: block">Previous</span>
+              ← Overview
+            </a>
+            <a href="implementation.html">
+              <span class="eyebrow" style="display: block">Next</span>
+              Implementation →
+            </a>
+          </nav>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <p>
+          <strong>Colophon</strong> — Apache-2.0. Early development; the bundle contract is
+          not yet stable. Everything on this site is drawn from the repository itself.
+        </p>
+        <p class="small">
+          <a href="index.html">Overview</a> ·
+          <a href="implementation.html">Implementation</a> ·
+          <a href="agents.html">For agents</a> ·
+          <a href="getting-started.html">Getting started</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

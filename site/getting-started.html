@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Getting started — Colophon</title>
+    <meta
+      name="description"
+      content="Annotate a catalog entity, publish a docs tree from CI, and configure the Colophon backend: storage, retention, chunking, indexing schedule and MCP exposure."
+    />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="index.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span>Colophon</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="architecture.html">Architecture</a></li>
+            <li><a href="implementation.html">Implementation</a></li>
+            <li><a href="agents.html">For agents</a></li>
+            <li><a href="getting-started.html" aria-current="page">Getting started</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="shell">
+        <article class="doc">
+          <p class="eyebrow">Getting started</p>
+          <h1>Annotate, publish, configure</h1>
+          <p class="lead">
+            Three moving parts: a catalog annotation linking an entity to a bundle, a CI step
+            that publishes the docs tree, and a block of app-config telling the backend where
+            to read from.
+          </p>
+
+          <p class="note note--status">
+            <strong>Not installable yet.</strong> Colophon is in early development and no
+            package has been published to a registry. The commands below are the shape the
+            workflow takes, run against the packages in this repository — they are not yet
+            an <code>npm install</code> away.
+          </p>
+
+          <!-- ---------------------------------------------- 01 annotation -->
+          <section class="section" id="annotate" aria-labelledby="annotate-h">
+            <p class="eyebrow">01</p>
+            <h2 id="annotate-h">Link the entity to a bundle</h2>
+            <p>
+              One annotation in <code>catalog-info.yaml</code>. The value is a bundle id —
+              lowercase, path-like, and usable verbatim as a storage key prefix.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>catalog-info.yaml</figcaption>
+              <pre><code>metadata:
+  annotations:
+    brnby.io/colophon: github.com/brnby/payments-api</code></pre>
+            </figure>
+
+            <h3>Monorepos: the <code>#subpath</code> form</h3>
+            <p>
+              When several components share one <code>docs/</code> tree, scope each entity to
+              a subtree by appending <code>#</code> and a slug prefix. Each entity's docs tab
+              — and each agent's view of it — is filtered to that subtree, and a request for
+              a slug outside it returns not found.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>catalog-info.yaml — one bundle, many components</figcaption>
+              <pre><code><span class="cm"># services/billing</span>
+    brnby.io/colophon: github.com/brnby/platform#services/billing
+
+<span class="cm"># services/ledger</span>
+    brnby.io/colophon: github.com/brnby/platform#services/ledger</code></pre>
+            </figure>
+
+            <p>
+              Both shapes are supported: one shared bundle referenced by many entities, or
+              one bundle per component published separately from the same repository.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------- 02 publish -->
+          <section class="section" id="publish" aria-labelledby="publish-h">
+            <p class="eyebrow">02</p>
+            <h2 id="publish-h">Publish from CI</h2>
+            <p>
+              The publisher scans the directory, validates it, assembles a manifest, uploads
+              the blobs that are not already stored, and writes the manifest last.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>.github/workflows/docs.yml</figcaption>
+              <pre><code>- name: Publish documentation
+  run: |
+    npx @brnby/colophon-cli publish ./docs \
+      --bundle-id "github.com/${{ github.repository }}" \
+      --channel latest \
+      --storage s3 \
+      --s3-bucket "$COLOPHON_BUCKET"</code></pre>
+            </figure>
+
+            <p>
+              Add <code>--backend-url</code> and <code>--token</code> to register the
+              revision with Backstage in the same step, so the channel is repointed as soon
+              as the upload lands rather than at the next scheduled indexing run. The
+              publisher also ships as a container image, built to run as
+              <code>docker run -v "$PWD:/work"</code> against a repository it does not have
+              baked in.
+            </p>
+
+            <h3>Release branches map onto channels</h3>
+            <p>
+              The default channel is what a bare docs URL resolves to. Other channels stay
+              reachable through the version picker, and through
+              <code>colophon:search</code> with an explicit <code>channel</code> filter.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>.github/workflows/docs.yml — channel per branch</figcaption>
+              <pre><code>      --channel ${{ github.ref_name == 'main' &amp;&amp; 'latest' || github.ref_name }}</code></pre>
+            </figure>
+
+            <p>
+              A pull request publishing to <code>pr-42</code> never touches
+              <code>latest</code>, and the revision it creates is not chunked until something
+              points at it.
+            </p>
+
+            <h3>Verify before you push</h3>
+            <p>
+              <code>colophon validate ./docs</code> runs the same scan and validation as
+              <code>publish</code> without uploading anything, which makes it a good
+              pre-commit hook. Add <code>--strict</code> to turn advisory diagnostics —
+              chiefly a missing page <code>description</code> — into failures.
+            </p>
+          </section>
+
+          <!-- -------------------------------------------------- 03 config -->
+          <section class="section" id="configure" aria-labelledby="configure-h">
+            <p class="eyebrow">03</p>
+            <h2 id="configure-h">Configure the backend</h2>
+            <p>
+              Every key lives under <code>colophon</code> in <code>app-config.yaml</code>.
+              The backend needs read-only access to the store; CI needs write.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>app-config.yaml</figcaption>
+              <pre><code>colophon:
+  storage:
+    type: s3                      <span class="cm"># s3 | local</span>
+    s3:
+      bucket: ${COLOPHON_BUCKET}
+      region: ${AWS_REGION}
+    <span class="cm"># For local development, prefer:</span>
+    <span class="cm"># type: local</span>
+    <span class="cm"># local:</span>
+    <span class="cm">#   directory: ./colophon-data</span>
+
+  retention:
+    <span class="cm"># Revisions a channel points at are never collected. Beyond those, this</span>
+    <span class="cm"># many recent revisions per channel are retained.</span>
+    revisionsPerChannel: 10
+
+  chunking:
+    <span class="cm"># Applied at index time, so changing these re-chunks on the next run</span>
+    <span class="cm"># without any repository re-running its CI.</span>
+    splitDepths: [2, 3]
+    maxChars: 1500
+    minChars: 200
+
+  schedule:
+    frequency: { minutes: 10 }
+    timeout: { minutes: 15 }</code></pre>
+            </figure>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Key</th>
+                    <th scope="col">Required</th>
+                    <th scope="col">Default</th>
+                    <th scope="col">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row"><code>storage.type</code></th>
+                    <td>yes</td>
+                    <td>—</td>
+                    <td><code>s3</code> or <code>local</code></td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>storage.s3.bucket</code></th>
+                    <td>when <code>s3</code></td>
+                    <td>—</td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>storage.s3.region</code></th>
+                    <td>when <code>s3</code></td>
+                    <td>AWS SDK default</td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>storage.local.directory</code></th>
+                    <td>when <code>local</code></td>
+                    <td>—</td>
+                    <td>Development only</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>retention.revisionsPerChannel</code></th>
+                    <td>no</td>
+                    <td><code>10</code></td>
+                    <td>Channel-pointed revisions are never collected</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>chunking.splitDepths</code></th>
+                    <td>no</td>
+                    <td><code>[2, 3]</code></td>
+                    <td>Heading depths that start a chunk</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>chunking.maxChars</code></th>
+                    <td>no</td>
+                    <td><code>1500</code></td>
+                    <td>Soft ceiling; long sections split on paragraphs</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>chunking.minChars</code></th>
+                    <td>no</td>
+                    <td><code>200</code></td>
+                    <td>Shorter sections merge into the next sibling</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p>
+              MCP exposure is configured in the MCP Actions Backend rather than under
+              <code>colophon</code> — see
+              <a href="agents.html#auth">the agent-facing page</a> for that block and for
+              per-user OAuth. A complete example lives at
+              <code>app-config.colophon.yaml</code> in the repository.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------- 04 authoring -->
+          <section class="section" id="authoring" aria-labelledby="authoring-h">
+            <p class="eyebrow">04</p>
+            <h2 id="authoring-h">Writing docs that retrieve well</h2>
+
+            <figure class="code bleed">
+              <figcaption>docs/ layout</figcaption>
+              <pre><code>docs/
+  index.md          <span class="cm">required, the entry point</span>
+  **/*.md           <span class="cm">nesting is fine</span>
+  _assets/          <span class="cm">images and attachments</span>
+  docs.yaml         <span class="cm">optional: explicit nav and overrides</span></code></pre>
+            </figure>
+
+            <p>
+              Navigation is derived from the directory tree unless <code>docs.yaml</code>
+              supplies an explicit <code>nav</code>. Keeping that file optional is
+              deliberate: requiring an explicit nav is the biggest onboarding tax in MkDocs.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>frontmatter</figcaption>
+              <pre><code>---
+title: Rotating database credentials
+description: One sentence describing what this page answers.
+type: how-to          <span class="cm"># tutorial | how-to | reference | explanation</span>
+tags: [database, security]
+status: current       <span class="cm"># current | draft | deprecated</span>
+---</code></pre>
+            </figure>
+
+            <p>
+              Only <code>title</code> is strictly required, and even that falls back to the
+              first H1. Two of the optional fields carry more weight than they look.
+            </p>
+            <p>
+              <strong><code>description</code></strong> is what an agent sees in a search
+              result before deciding whether to fetch the whole page. A weak description
+              means the agent fetches everything and burns its context.
+            </p>
+            <p>
+              <strong><code>type</code></strong> uses the
+              <a href="https://diataxis.fr">Diátaxis</a> categories. It groups the UI, lets
+              agents filter for the right kind of page, and nudges you toward one purpose per
+              page — which is what makes sections self-contained.
+            </p>
+
+            <h3>Write sections that survive being read alone</h3>
+            <p>
+              Retrieval cuts pages into chunks at H2 and H3, and every section is retrieved
+              without its neighbours.
+            </p>
+            <ul>
+              <li>Say "OAuth 2.0 authentication", not "the authentication method above".</li>
+              <li>Avoid pronouns that point at the previous section.</li>
+              <li>Keep one complete thought under each heading.</li>
+            </ul>
+            <p>
+              A well-chunked corpus with plain full-text search beats a badly-chunked one
+              with state-of-the-art embeddings, because a chunk that does not stand alone is
+              useless no matter how well it was retrieved.
+            </p>
+          </section>
+
+          <!-- ----------------------------------------------------- 05 dev -->
+          <section class="section" id="local" aria-labelledby="local-h">
+            <p class="eyebrow">05</p>
+            <h2 id="local-h">Working on Colophon itself</h2>
+            <p>Node 22 or 24, and Yarn 4 via corepack.</p>
+
+            <figure class="code bleed">
+              <figcaption>shell</figcaption>
+              <pre><code>corepack enable
+yarn install
+yarn verify        <span class="cm"># lint + arch lint + typecheck + test</span></code></pre>
+            </figure>
+
+            <p>
+              Biome owns all formatting and general linting. ESLint is kept for exactly one
+              job — <code>plugin:@backstage/recommended</code>, seven monorepo
+              dependency-hygiene rules with no stylistic content — so the two tools cannot
+              conflict. Do not add stylistic rules to <code>.eslintrc.js</code>.
+            </p>
+            <p>
+              For a local end-to-end loop, publish to a directory instead of a bucket with
+              <code>--storage local --local-dir ./colophon-data</code> and point
+              <code>colophon.storage.local.directory</code> at the same path.
+            </p>
+          </section>
+
+          <nav class="pager bleed" aria-label="Page navigation">
+            <a href="agents.html">
+              <span class="eyebrow" style="display: block">Previous</span>
+              ← For agents
+            </a>
+            <a href="index.html">
+              <span class="eyebrow" style="display: block">Back to</span>
+              Overview →
+            </a>
+          </nav>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <p>
+          <strong>Colophon</strong> — Apache-2.0. Early development; the bundle contract is
+          not yet stable. Everything on this site is drawn from the repository itself.
+        </p>
+        <p class="small">
+          <a href="index.html">Overview</a> ·
+          <a href="architecture.html">Architecture</a> ·
+          <a href="implementation.html">Implementation</a> ·
+          <a href="agents.html">For agents</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

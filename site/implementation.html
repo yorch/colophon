@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Implementation — Colophon</title>
+    <meta
+      name="description"
+      content="The Colophon bundle contract with a real manifest, how revision identity is computed, the chunking rules, and the five packages that negotiate through them."
+    />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="index.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span>Colophon</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="architecture.html">Architecture</a></li>
+            <li><a href="implementation.html" aria-current="page">Implementation</a></li>
+            <li><a href="agents.html">For agents</a></li>
+            <li><a href="getting-started.html">Getting started</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="shell">
+        <article class="doc">
+          <p class="eyebrow">Implementation</p>
+          <h1>The contract everything negotiates through</h1>
+          <p class="lead">
+            One schema sits between the publisher, the backend, the frontend and the MCP
+            tools. If it is right, the four can be built independently; if it is wrong,
+            every one of them acquires a workaround.
+          </p>
+
+          <!-- ------------------------------------------------ 01 manifest -->
+          <section class="section" id="manifest" aria-labelledby="manifest-h">
+            <p class="eyebrow">01</p>
+            <h2 id="manifest-h">The manifest</h2>
+            <p>
+              The design rule is that a manifest is a <em>complete</em> index of a revision.
+              Titles, descriptions, the navigation tree, and every heading anchor live in
+              it, so the backend can render navigation, build a table of contents, validate
+              cross-page links and plan retrieval chunks without fetching a single Markdown
+              blob. Only page bodies require a blob read.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>manifest.json — abridged, from a real publish</figcaption>
+              <pre><code>{
+  "schemaVersion": 1,
+  "bundleId": "github.com/yorch/colophon",
+  "revisionId": "c25e73f7eee0c052eeccc2db0e1de2dfc06c391c6c514c381f3cfeab9d029d7a",
+  "createdAt": "2026-08-21T17:11:32.452Z",
+  "source": {
+    "type": "git",
+    "url": "https://github.com/yorch/colophon",
+    "ref": "main",
+    "commit": "4c47e41",
+    "path": "docs"
+  },
+  "publisher": { "name": "colophon-cli" },
+  "title": "Colophon",
+  "description": "Markdown documentation for the Backstage software catalog, …",
+  "pages": [
+    {
+      "path": "architecture.md",
+      "slug": "architecture",
+      "title": "Architecture",
+      "description": "How a docs directory becomes a bundle, and how Backstage serves it to both people and agents.",
+      "type": "explanation",
+      "status": "current",
+      "tags": ["architecture"],
+      "headings": [
+        { "depth": 1, "text": "Architecture",         "anchor": "architecture" },
+        { "depth": 2, "text": "Pipeline",             "anchor": "pipeline" },
+        { "depth": 2, "text": "Two storage systems",  "anchor": "two-storage-systems" }
+      ],
+      "contentHash": "1f08ced741e5626a59950c29ffe9cdb5a1139c33df90be5114d12417bc29b36b",
+      "size": 2187
+    }
+  ],
+  "nav": [
+    { "title": "Colophon",     "slug": "" },
+    { "title": "Architecture", "slug": "architecture" },
+    {
+      "title": "Guides",
+      "children": [
+        { "title": "Publishing documentation", "slug": "guides/publishing" },
+        { "title": "Writing documentation",    "slug": "guides/writing-docs" }
+      ]
+    }
+  ],
+  "assets": []
+}</code></pre>
+            </figure>
+            <p class="small muted">
+              Abridged for the page: one of five <code>pages</code> entries is shown, with
+              three of its six headings, and short arrays are compacted onto single lines.
+              Every value shown is as generated.
+            </p>
+
+            <h3>What is deliberately absent</h3>
+            <p>
+              There is no <code>channel</code> field. A manifest describes content; a channel
+              describes routing, and it is recorded in the database at publish time instead.
+              That is what keeps revisions genuinely immutable and lets a rollback be a
+              pointer move rather than a rebuild.
+            </p>
+            <p>
+              <code>createdAt</code> is canonical UTC with a trailing <code>Z</code>, and
+              offsets are rejected rather than normalised. Canonical UTC sorts
+              lexicographically and carries no offset ambiguity, so publishers convert
+              before they publish.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------ 02 identity -->
+          <section class="section" id="identity" aria-labelledby="identity-h">
+            <p class="eyebrow">02</p>
+            <h2 id="identity-h">Revision identity</h2>
+            <p>
+              The revision id is the sha-256 of the canonicalised manifest body — but not of
+              the whole manifest. Two fields are excluded, and the reason is a bug found by
+              publishing this repository's own docs twice.
+            </p>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Field</th>
+                    <th scope="col">In the id?</th>
+                    <th scope="col">Why</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row"><code>pages</code>, <code>nav</code>, <code>assets</code></th>
+                    <td>Yes</td>
+                    <td>This is the documentation.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>bundleId</code>, <code>title</code></th>
+                    <td>Yes</td>
+                    <td>Identity of the thing being published.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>source.commit</code></th>
+                    <td>Yes</td>
+                    <td>
+                      So identical docs built from different commits remain distinct
+                      revisions.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>createdAt</code></th>
+                    <td>No</td>
+                    <td>Describes the run, not the documentation.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>publisher</code></th>
+                    <td>No</td>
+                    <td>
+                      Same — and it carries <code>runUrl</code>, which differs on every
+                      retry.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p>
+              With the timestamp inside the hash, a retried pipeline produced a brand new
+              revision every time and history grew without bound — precisely the duplicate
+              history that content-addressing exists to prevent. Excluding it makes
+              publishing idempotent: the repeat publish on the
+              <a href="index.html#proof">home page</a> emits the same id and uploads nothing.
+            </p>
+
+            <h3>Keys</h3>
+            <p>
+              Bundle ids allow <code>/</code> so they can be used verbatim as a storage key
+              prefix. <code>bundles/github.com/brnby/payments-api/…</code> is far easier to
+              debug in a bucket browser than an opaque hash, and the charset is restricted to
+              what is safe in an S3 key, a URL path and a filesystem path at once.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>object-storage key layout</figcaption>
+              <pre><code>blobs/&lt;ab&gt;/&lt;sha256&gt;                                   <span class="cm">content-addressed, shared</span>
+bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
+            </figure>
+
+            <p>
+              Lowercase is enforced, not merely recommended. TechDocs still carries a
+              <code>legacyPathCasing</code> compatibility flag because it allowed
+              case-sensitive keys and then met case-insensitive storage; there is no reason
+              to re-learn that lesson.
+            </p>
+          </section>
+
+          <!-- ------------------------------------------------ 03 chunking -->
+          <section class="section" id="chunking" aria-labelledby="chunking-h">
+            <p class="eyebrow">03</p>
+            <h2 id="chunking-h">Chunking</h2>
+            <p>
+              Retrieval chunks are what an agent actually receives from
+              <code>colophon:search</code>. A page is cut into sections at heading
+              boundaries, and each section carries the heading trail it sits under.
+            </p>
+
+            <figure class="figure bleed">
+              <div class="figure-scroll">
+                <svg
+                  class="diagram diagram--wide"
+                  viewBox="0 0 960 300"
+                  role="img"
+                  aria-labelledby="imp-chunk-title imp-chunk-desc"
+                >
+                  <title id="imp-chunk-title">Cutting a page into breadcrumb-carrying chunks</title>
+                  <desc id="imp-chunk-desc">
+                    On the left, a Markdown page whose title heading is followed by three
+                    level-two headings with paragraphs beneath them. On the right, three
+                    retrieval chunks, one per heading. Each chunk carries a breadcrumb that
+                    starts with the page title and ends with its own heading, plus its
+                    ordinal position in the page and the heading anchor used for deep
+                    linking.
+                  </desc>
+                  <defs>
+                    <marker id="imp-chunk-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" class="head" />
+                    </marker>
+                  </defs>
+
+                  <text class="t-accent" x="16" y="18">ONE PAGE</text>
+                  <text class="t-accent" x="400" y="18">THREE RETRIEVAL CHUNKS</text>
+
+                  <rect class="node-alt" x="16" y="28" width="300" height="254" rx="7" />
+
+                  <text class="t-mono" x="32" y="58"># Publishing documentation</text>
+
+                  <text class="t-mono" x="32" y="88">## Link the entity to a bundle</text>
+                  <rect class="node" x="32" y="96" width="210" height="6" rx="3" />
+                  <rect class="node" x="32" y="108" width="164" height="6" rx="3" />
+
+                  <text class="t-mono" x="32" y="140">## Publish from CI</text>
+                  <rect class="node" x="32" y="148" width="232" height="6" rx="3" />
+                  <rect class="node" x="32" y="160" width="182" height="6" rx="3" />
+
+                  <text class="t-mono" x="32" y="192">## Release branches</text>
+                  <rect class="node" x="32" y="200" width="204" height="6" rx="3" />
+                  <rect class="node" x="32" y="212" width="152" height="6" rx="3" />
+                  <rect class="node" x="32" y="224" width="188" height="6" rx="3" />
+
+                  <text class="t-sub" x="32" y="256">…</text>
+
+                  <path class="edge" d="M320,84 C 356,84 360,70 394,70" marker-end="url(#imp-chunk-head)" />
+                  <path class="edge" d="M320,136 C 356,136 360,158 394,158" marker-end="url(#imp-chunk-head)" />
+                  <path class="edge" d="M320,188 C 356,188 360,246 394,246" marker-end="url(#imp-chunk-head)" />
+
+                  <rect class="node-accent" x="400" y="34" width="544" height="72" rx="7" />
+                  <text class="t" x="416" y="62">Publishing documentation ▸ Link the entity to a bundle</text>
+                  <text class="t-mono" x="416" y="84">ordinal 0 · anchor link-the-entity-to-a-bundle</text>
+
+                  <rect class="node-accent" x="400" y="122" width="544" height="72" rx="7" />
+                  <text class="t" x="416" y="150">Publishing documentation ▸ Publish from CI</text>
+                  <text class="t-mono" x="416" y="172">ordinal 1 · anchor publish-from-ci</text>
+
+                  <rect class="node-accent" x="400" y="210" width="544" height="72" rx="7" />
+                  <text class="t" x="416" y="238">Publishing documentation ▸ Release branches</text>
+                  <text class="t-mono" x="416" y="260">ordinal 2 · anchor release-branches</text>
+                </svg>
+              </div>
+              <figcaption>
+                The page is a real one from this repository's own docs corpus; the chunk
+                cards show the fields the chunker produces for it.
+              </figcaption>
+            </figure>
+
+            <h3>H2 and H3, not H2 alone</h3>
+            <p>
+              Reference pages put one endpoint or one configuration option per H3. Splitting
+              only on H2 would glue thirty unrelated options into a single chunk and destroy
+              retrieval precision. The size ceiling then catches prose sections that run
+              long, and the floor merges heading stubs that carry no content of their own.
+            </p>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Option</th>
+                    <th scope="col">Default</th>
+                    <th scope="col">Behaviour</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row"><code>splitDepths</code></th>
+                    <td><code>[2, 3]</code></td>
+                    <td>Heading depths that start a new chunk.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>maxChars</code></th>
+                    <td><code>1500</code></td>
+                    <td>
+                      Soft ceiling. Blocks are packed greedily; a single block larger than
+                      the ceiling is emitted alone rather than cut, because slicing through
+                      a fenced code block or a table row produces a chunk worse than an
+                      oversized one.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>minChars</code></th>
+                    <td><code>200</code></td>
+                    <td>
+                      Short sections merge into the following sibling, keeping the
+                      following section's anchor and breadcrumb — that is where the content
+                      is, and a deep link should land where the reader is looking.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>overlapChars</code></th>
+                    <td><code>0</code></td>
+                    <td>
+                      Optional continuity tail. Taken from the previous chunk's own text,
+                      never from its already-overlapped form, so repetition does not
+                      compound down a page.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>The breadcrumb is the cheap defence</h3>
+            <p>
+              Every chunk carries the trail from the page title down to its own heading —
+              <code>["Payments API", "Operations", "Rotating credentials"]</code> — and that
+              trail is prepended to the chunk text at retrieval time. A chunk read in
+              isolation still says what it is about. This matters more to retrieval quality
+              than any ranking algorithm: a chunk that does not stand alone is useless no
+              matter how well it was retrieved.
+            </p>
+
+            <h3>In the backend, at index time</h3>
+            <p>
+              Chunking runs in the backend when a revision is indexed, not in the CLI when
+              it is published. The strategy will change as we learn what agents retrieve
+              well, and re-chunking must never require every repository in the organisation
+              to re-run its CI. Changing <code>chunking.maxChars</code> in app-config
+              re-chunks on the next indexing run and nothing else moves.
+            </p>
+            <p>
+              Two details that only show up once you run it on real Markdown. Frontmatter is
+              stripped before parsing rather than parsed as content — without that,
+              <code>title: Foo</code> followed by <code>---</code> reads as a setext heading
+              and invents a heading that does not exist. And every heading consumes a slug
+              whether or not it starts a chunk, so duplicate headings get the same
+              <code>-1</code> suffixes GitHub and the publisher CLI produce.
+            </p>
+          </section>
+
+          <!-- ---------------------------------------------- 04 validation -->
+          <section class="section" id="validation" aria-labelledby="validation-h">
+            <p class="eyebrow">04</p>
+            <h2 id="validation-h">Rejecting at the boundary</h2>
+            <p>
+              <code>validate</code> and <code>publish</code> run the same build, so the two
+              cannot drift into disagreeing about what is publishable. Validation rejects at
+              the boundary rather than letting three downstream consumers each invent their
+              own handling.
+            </p>
+            <ul>
+              <li>Relative links that resolve to nothing.</li>
+              <li>Heading anchors that match no heading.</li>
+              <li>Referenced assets that are not in the tree.</li>
+              <li>
+                Duplicate slugs — the trap where <code>guides/index.md</code> and
+                <code>guides.md</code> both address <code>guides</code>, and one author's
+                edits silently go nowhere.
+              </li>
+            </ul>
+            <p>
+              A missing <code>description</code> warns by default and fails under
+              <code>--strict</code>, because a weak description is what makes an agent fetch
+              a whole page it did not need.
+            </p>
+            <p class="note">
+              <strong>Found by dogfooding.</strong> The docs-root <code>index.md</code> has
+              the empty slug and therefore no segment in the directory tree. It was being
+              dropped from the derived navigation and then reported as an orphan by the same
+              run. It now leads the nav.
+            </p>
+          </section>
+
+          <!-- ----------------------------------------------- 05 packages -->
+          <section class="section" id="packages" aria-labelledby="packages-h">
+            <p class="eyebrow">05</p>
+            <h2 id="packages-h">Five packages</h2>
+            <p>
+              The roles follow Backstage conventions, which is not cosmetic: the role drives
+              the build output shape and which dependency field
+              <code>@backstage/no-undeclared-imports</code> expects.
+            </p>
+
+            <div class="table-wrap bleed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Package</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Owns</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row"><code>colophon-common</code></th>
+                    <td><code>common-library</code></td>
+                    <td>Manifest schema, identifiers, storage key layout, chunk contract.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>colophon-cli</code></th>
+                    <td><code>cli</code></td>
+                    <td>Scan, validate, hash, upload, register. Also shipped as an image.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>plugin-colophon-backend</code></th>
+                    <td><code>backend-plugin</code></td>
+                    <td>
+                      Storage abstraction, Knex schema, chunker, channels, retention,
+                      router, search collator, MCP actions.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>plugin-colophon-react</code></th>
+                    <td><code>web-library</code></td>
+                    <td>
+                      Markdown renderer, component override registry, sanitize schema,
+                      theme-aware Mermaid.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><code>plugin-colophon</code></th>
+                    <td><code>frontend-plugin</code></td>
+                    <td>Entity docs tab, cross-repository docs home, channel picker.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p>
+              The component override registry in <code>colophon-react</code> is the extension
+              point that keeps the theming promise. Because the stored artifact is Markdown,
+              a portal can replace the renderer for any node type with its own component
+              instead of patching CSS at a DOM it does not control.
+            </p>
+            <p>
+              The dependency-hygiene rules are worth the second linter. They catch imports
+              that only resolve because Yarn hoisted a package to the workspace root — which
+              installs cleanly here and then fails for anyone consuming the published
+              package. Two such imports have already been caught this way.
+            </p>
+          </section>
+
+          <nav class="pager bleed" aria-label="Page navigation">
+            <a href="architecture.html">
+              <span class="eyebrow" style="display: block">Previous</span>
+              ← Architecture
+            </a>
+            <a href="agents.html">
+              <span class="eyebrow" style="display: block">Next</span>
+              For agents →
+            </a>
+          </nav>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <p>
+          <strong>Colophon</strong> — Apache-2.0. Early development; the bundle contract is
+          not yet stable. Everything on this site is drawn from the repository itself.
+        </p>
+        <p class="small">
+          <a href="index.html">Overview</a> ·
+          <a href="architecture.html">Architecture</a> ·
+          <a href="agents.html">For agents</a> ·
+          <a href="getting-started.html">Getting started</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
