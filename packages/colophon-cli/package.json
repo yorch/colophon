@@ -41,5 +41,8 @@
   "files": [
     "dist",
     "bin"
-  ]
+  ],
+  "devDependencies": {
+    "@backstage/cli": "^0.36.4"
+  }
 }
