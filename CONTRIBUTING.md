@@ -96,6 +96,13 @@ that is now spent. `scripts/check-packables.mjs` refuses to publish a package
 with nothing under `dist/`, so a reordering of those steps fails loudly rather
 than silently shipping nothing.
 
+It also puts back any manifest left half-rewritten. Packing runs `prepack`,
+which points `main` and `types` at `dist/`, and `postpack` swaps them back —
+but only if the pack reaches the end. Since this runs locally as part of
+`yarn release`, a pack that dies partway would otherwise leave a maintainer's
+working tree pointing the repository's own entrypoints at gitignored build
+output, and committing that breaks `yarn start` and the tests for everyone.
+
 ### First-time setup for a new package
 
 npm cannot configure a trusted publisher for a package that does not exist yet
