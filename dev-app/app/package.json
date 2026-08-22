@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Local Backstage frontend for exercising Colophon in a real app shell. Never published.",
+  "license": "MIT",
   "backstage": {
     "role": "frontend"
   },

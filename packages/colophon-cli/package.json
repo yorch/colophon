@@ -2,7 +2,7 @@
   "name": "@brnby/colophon-cli",
   "version": "0.1.0",
   "description": "Publishes a docs/ tree as a Colophon bundle.",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "bin": {

@@ -6,6 +6,18 @@ exposed as MCP tools for agents.
 > A colophon is the note in a book recording how it was made: the press, the
 > date, the typeface. This plugin's manifest is exactly that, for your docs.
 
+**📖 [Full documentation →](https://yorch.github.io/colophon/)**
+
+| | |
+| --- | --- |
+| [Overview](https://yorch.github.io/colophon/) | What it is and why it is not TechDocs |
+| [Architecture](https://yorch.github.io/colophon/architecture.html) | How a docs directory becomes a bundle, and how Backstage serves it |
+| [Implementation](https://yorch.github.io/colophon/implementation.html) | Chunking, permissions, storage, and the decisions behind them |
+| [For agents](https://yorch.github.io/colophon/agents.html) | The MCP tools, and what makes documentation retrievable |
+| [Getting started](https://yorch.github.io/colophon/getting-started.html) | Installing, publishing from CI, and `docs.yaml` |
+
+This README is the short version — the site above covers each topic properly.
+
 ## Status
 
 Early development. Nothing is published yet and the bundle contract may still
@@ -43,6 +55,9 @@ become two consumers of one structured source.
 [rfc33990]: https://github.com/backstage/backstage/issues/33990
 
 ## Architecture
+
+The short version; [the architecture page](https://yorch.github.io/colophon/architecture.html)
+covers the reasoning.
 
 ```
 repo (docs/**/*.md)
@@ -91,6 +106,9 @@ format between all four consumers, so that package is where compatibility is
 decided.
 
 ## Publishing
+
+See [getting started](https://yorch.github.io/colophon/getting-started.html) for
+the CI workflow, release branches and `docs.yaml`.
 
 ```bash
 colophon publish ./docs \
@@ -212,4 +230,4 @@ run because the publish timestamp was inside the hash.
 
 ## License
 
-Apache-2.0
+[MIT](LICENSE) © Jorge Barnaby

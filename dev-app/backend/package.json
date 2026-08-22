@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Local Backstage backend for exercising Colophon against a real catalog. Never published.",
+  "license": "MIT",
   "backstage": {
     "role": "backend"
   },

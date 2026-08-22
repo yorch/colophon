@@ -1,8 +1,8 @@
 {
   "name": "@brnby/plugin-colophon",
   "version": "0.1.0",
-  "description": "Colophon frontend plugin — entity docs tab and cross-repository docs home.",
-  "license": "Apache-2.0",
+  "description": "Colophon frontend plugin \u2014 entity docs tab and cross-repository docs home.",
+  "license": "MIT",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {

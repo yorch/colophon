@@ -1,8 +1,8 @@
 {
   "name": "@brnby/plugin-colophon-backend",
   "version": "0.1.0",
-  "description": "Colophon backend — bundle storage, channels, search indexing, and MCP actions.",
-  "license": "Apache-2.0",
+  "description": "Colophon backend \u2014 bundle storage, channels, search indexing, and MCP actions.",
+  "license": "MIT",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {
