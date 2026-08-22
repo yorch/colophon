@@ -97,12 +97,19 @@ npm cannot configure a trusted publisher for a package that does not exist yet
 ([npm/cli#8544](https://github.com/npm/cli/issues/8544)), so a brand-new
 package cannot be published over OIDC. Bootstrapping is:
 
-1. Add an npm **automation token** as the `NPM_TOKEN` repository secret.
-2. Let the Release workflow publish once. `NODE_AUTH_TOKEN` picks the token up.
+1. Add an npm **granular access token** as the `NPM_TOKEN` repository secret.
+   It must grant **read and write** on the `@brnby` **scope** — not on selected
+   packages, which cannot cover packages that do not exist yet.
+2. Let the Release workflow publish once. The token reaches npm through
+   `YARN_NPM_AUTH_TOKEN`, **not** `NODE_AUTH_TOKEN`: changesets detects the
+   workspace tool and publishes a Yarn Berry repo with `yarn npm publish`,
+   which reads Yarn's own configuration and ignores both `NODE_AUTH_TOKEN` and
+   the `.npmrc` that `actions/setup-node` writes.
 3. On npmjs.com, open each package's **Settings → Trusted publisher** and point
    it at this repository and `.github/workflows/release.yml`.
 4. Delete the `NPM_TOKEN` secret and the `NODE_AUTH_TOKEN` line from the
    workflow. OIDC takes over, and there is no longer a credential to rotate.
 
 After step 4 every release carries a provenance attestation linking the tarball
-to the commit and workflow that produced it.
+to the commit and workflow that produced it. Yarn performs the OIDC exchange
+itself from 4.9.0 onwards; this repository pins 4.13.0.
