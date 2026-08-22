@@ -1,5 +1,6 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { Box, Flex, Link, SearchField, Text } from '@backstage/ui';
+import { useColophonStyles } from '@brnby/plugin-colophon-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { BundleSummary } from '../api';
@@ -27,6 +28,7 @@ export function DocsHomePage() {
 
 /** Browses every published bundle. */
 function BundleList() {
+  useColophonStyles();
   const api = useApi(colophonApiRef);
   const [bundles, setBundles] = useState<BundleSummary[]>();
   const [error, setError] = useState<Error>();
@@ -73,7 +75,7 @@ function BundleList() {
   }
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '56rem' }}>
       <SearchField
         label="Filter"
         value={filter}
@@ -82,15 +84,37 @@ function BundleList() {
       />
       <Flex direction="column" gap="3" style={{ marginTop: '1rem' }}>
         {visible.map(bundle => (
-          <Box key={bundle.bundleId}>
-            <Link href={`/colophon/${bundle.bundleId}`}>{bundle.title}</Link>
+          // The whole row is the link, not just the title: a row is one
+          // destination, and a title-sized target in a full-width row is a
+          // needlessly small thing to hit.
+          <div key={bundle.bundleId} className="colophon-bundle-row">
+            {/* `as="div"` throughout: BUI's Text is inline by default, and
+                three inline children in a row rendered the title, the
+                description and the id as one unbroken line of prose. */}
+            <Text variant="body-medium" weight="bold" as="div">
+              {/* Only the title is the link. Its hit area is stretched over
+                  the whole row in CSS, which keeps the row clickable without
+                  making every word in it part of the link's name. */}
+              <a
+                className="colophon-bundle-row-link"
+                href={`/colophon/${bundle.bundleId}`}
+              >
+                {bundle.title}
+              </a>
+            </Text>
             {bundle.description && (
-              <Text color="secondary">{bundle.description}</Text>
+              <Text
+                color="secondary"
+                as="div"
+                style={{ marginBlock: '0.35rem' }}
+              >
+                {bundle.description}
+              </Text>
             )}
-            <Text variant="body-small" color="secondary">
+            <Text variant="body-small" color="secondary" as="div">
               {bundle.bundleId}
             </Text>
-          </Box>
+          </div>
         ))}
         {visible.length === 0 && (
           <Text>No documentation matches “{filter}”.</Text>
