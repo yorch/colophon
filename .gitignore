@@ -38,3 +38,9 @@ app-config.local.yaml
 
 # Bundles published by `yarn dev:seed` for the local harness.
 colophon-data/
+
+# Git worktrees created for isolated agent runs. Each is a full checkout —
+# including its own biome.json, which Biome reads as a second root config and
+# refuses to run at all ("Found a nested root configuration"). Only the
+# worktrees are ignored, so a committed .claude/settings.json still works.
+.claude/worktrees/
