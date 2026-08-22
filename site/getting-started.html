@@ -181,7 +181,41 @@
           <!-- -------------------------------------------------- 03 config -->
           <section class="section" id="configure" aria-labelledby="configure-h">
             <p class="eyebrow">03</p>
-            <h2 id="configure-h">Configure the backend</h2>
+            <h2 id="configure-h">Install and configure</h2>
+            <p>
+              Releases go out under the <code>next</code> dist-tag while the bundle
+              contract is still moving, so ask for it explicitly.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>shell</figcaption>
+              <pre><code>yarn workspace backend add @brnby/plugin-colophon-backend@next
+yarn workspace app add @brnby/plugin-colophon@next</code></pre>
+            </figure>
+
+            <figure class="code bleed">
+              <figcaption>packages/backend/src/index.ts</figcaption>
+              <pre><code>import { searchModuleColophonCollator } from '@brnby/plugin-colophon-backend';
+
+backend.add(import('@brnby/plugin-colophon-backend'));
+<span class="cm">// Only if you want documentation in portal-wide search.</span>
+backend.add(searchModuleColophonCollator);</code></pre>
+            </figure>
+
+            <p>
+              The collator is a named export of the package's main entry point rather than
+              an <code>/alpha</code> subpath, and <code>backend.add</code> takes a feature
+              or a promise of a module namespace — not a promise of a feature — so the
+              static import is the shape that type-checks.
+            </p>
+
+            <figure class="code bleed">
+              <figcaption>packages/app/src/App.tsx — New Frontend System</figcaption>
+              <pre><code>import colophonPlugin from '@brnby/plugin-colophon';
+
+const app = createApp({ features: [colophonPlugin] });</code></pre>
+            </figure>
+
             <p>
               Every key lives under <code>colophon</code> in <code>app-config.yaml</code>.
               The backend needs read-only access to the store; CI needs write.

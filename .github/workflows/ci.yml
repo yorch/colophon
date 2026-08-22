@@ -35,6 +35,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # changeset status diffs against the base branch, which a shallow
+          # clone does not contain.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -60,6 +64,13 @@ jobs:
 
       - name: Build
         run: yarn build
+
+      # A pull request that changes a published package without saying how it
+      # should be released leaves the next release guessing. Skipped on main,
+      # where the changesets have already been consumed by a release.
+      - name: Changeset present
+        if: github.event_name == 'pull_request'
+        run: yarn changeset status --since=origin/${{ github.base_ref }}
 
   docker:
     runs-on: ubuntu-latest

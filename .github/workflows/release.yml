@@ -1,0 +1,68 @@
+# Publishes the packages to npm.
+#
+# Two-step by design. A push to main that carries changesets makes this open a
+# "Version Packages" pull request: version bumps, updated interdependencies and
+# generated changelogs, as a diff to review. Merging that pull request is what
+# publishes. Nothing reaches npm without a human approving the version numbers,
+# and an npm version cannot be unpublished after 72 hours.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  # npm trusted publishing. Lets the job mint an OIDC token so npm can verify
+  # the release came from this workflow in this repository, with no long-lived
+  # credential and a provenance attestation on the published package.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Changesets compares against the base branch to decide what to
+          # release, which a shallow clone cannot answer.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # Writes the .npmrc that both the OIDC exchange and the bootstrap
+          # token rely on.
+          registry-url: https://registry.npmjs.org
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: yarn install --immutable
+
+      # The same checks main is already required to pass. Publishing is the one
+      # action in this repository that cannot be undone, so it does not inherit
+      # trust from an earlier run.
+      - name: Verify
+        run: yarn verify
+
+      - uses: changesets/action@v1
+        with:
+          version: yarn version-packages
+          publish: yarn release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only needed to BOOTSTRAP. npm cannot configure a trusted publisher
+          # for a package that does not exist yet (npm/cli#8544), so the very
+          # first publish of each package needs a token. Once every package
+          # exists and has a trusted publisher configured, delete the secret
+          # and this line — OIDC takes over and leaves nothing to rotate.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

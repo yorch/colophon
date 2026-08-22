@@ -1,7 +1,7 @@
 {
   "name": "@brnby/plugin-colophon",
-  "version": "0.1.0",
-  "description": "Colophon frontend plugin \u2014 entity docs tab and cross-repository docs home.",
+  "version": "0.0.0",
+  "description": "Colophon frontend plugin — entity docs tab and cross-repository docs home.",
   "license": "MIT",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -12,7 +12,12 @@
   },
   "backstage": {
     "role": "frontend-plugin",
-    "pluginId": "colophon"
+    "pluginId": "colophon",
+    "pluginPackages": [
+      "@brnby/plugin-colophon",
+      "@brnby/plugin-colophon-backend",
+      "@brnby/plugin-colophon-react"
+    ]
   },
   "sideEffects": false,
   "scripts": {
