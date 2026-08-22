@@ -84,6 +84,21 @@ one does not exist, which is just as well — changesets' `createGithubReleases`
 flag also governs whether tags are pushed at all, so turning the per-package
 releases off would otherwise have left no tags anywhere.
 
+That step works out what to release from the repository, not from the
+changesets action: the version comes from the manifests, the list of packages
+from the `fixed` group in `.changeset/config.json`, and whether the release has
+already been made from whether the tag exists. So a push to main that does not
+bump the version is a no-op, and re-running a release that already tagged is
+safe.
+
+It used to be gated on the action's `published` output instead, and that is how
+0.1.1 reached npm with no tag and no release, in a run that reported success.
+The action derives `published` by regex-matching `New tag: <pkg>@<version>` out
+of the publish script's stdout — a line changesets stopped printing in v3, which
+reports `◇ Successfully published:` from a progress UI. Five packages went out
+and the output still read `false`. Nothing in the workflow reads another tool's
+console output any more.
+
 Releases currently go out under the `next` dist-tag, so `npm install
 @brnby/plugin-colophon` resolves to nothing while the bundle contract is still
 moving. To promote a version once you are ready to stand behind it:
