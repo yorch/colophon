@@ -1,4 +1,4 @@
-import { colophonPlugin } from './plugin';
+import { colophonPlugin, colophonRouteRef } from './plugin';
 
 /**
  * Verifies the plugin ASSEMBLES, which the component tests do not.
@@ -28,6 +28,22 @@ describe('the frontend plugin', () => {
     // where it attaches: a routable page rather than a stray element.
     const page = colophonPlugin.getExtension('page:colophon/colophon');
     expect(JSON.stringify(page)).toContain('"id":"app/routes"');
+  });
+
+  it('declares a route ref for the docs page', () => {
+    // The app discovers sidebar entries from page extensions and needs a
+    // title, an icon AND a route ref to build one. Missing any of the three
+    // leaves the page reachable by URL and absent from the nav, with nothing
+    // logged — so the only way this stays true is to assert it.
+    expect(colophonRouteRef).toBeDefined();
+  });
+
+  it('routes the docs page without a trailing wildcard', () => {
+    // A bundle id contains slashes, which invites writing `/colophon/*` here.
+    // The router appends its own splat, so that nests one splat inside
+    // another and the page 404s at every URL — including its own root.
+    const page = colophonPlugin.getExtension('page:colophon/colophon');
+    expect(JSON.stringify(page)).not.toContain('/colophon/*');
   });
 
   it('contributes an entity documentation tab', () => {

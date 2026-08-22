@@ -1,5 +1,6 @@
 import { Link, Text } from '@backstage/ui';
 import type { NavNode } from '@brnby/colophon-common';
+import { useColophonStyles } from '../styles';
 
 export interface ColophonNavProps {
   nodes: NavNode[];
@@ -23,6 +24,7 @@ export function ColophonNav({
   hrefForSlug,
   label = 'Documentation',
 }: ColophonNavProps) {
+  useColophonStyles();
   if (nodes.length === 0) {
     return null;
   }

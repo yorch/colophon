@@ -1,6 +1,6 @@
 import { stripFrontmatter } from '@brnby/colophon-common';
 import type { ComponentProps, ReactNode } from 'react';
-import { Children, isValidElement, useEffect, useMemo } from 'react';
+import { Children, isValidElement, useMemo } from 'react';
 import type { Components } from 'react-markdown';
 import Markdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
@@ -8,7 +8,7 @@ import rehypeSlug from 'rehype-slug';
 import remarkGfm from 'remark-gfm';
 import { useColophonComponents } from '../registry';
 import { colophonSanitizeSchema } from '../sanitizeSchema';
-import { ensureColophonStyles } from '../styles';
+import { useColophonStyles } from '../styles';
 import type { CodeBlockProps } from '../types';
 
 type MarkdownProps = ComponentProps<typeof Markdown>;
@@ -43,7 +43,7 @@ export function ColophonMarkdown({
   // rendered heading set out of step with the manifest the ToC is built from.
   const body = useMemo(() => stripFrontmatter(content), [content]);
 
-  useEffect(() => ensureColophonStyles(), []);
+  useColophonStyles();
 
   const components = useMemo<Components>(() => {
     const {

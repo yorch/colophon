@@ -1,5 +1,4 @@
 import { useApi } from '@backstage/core-plugin-api';
-import { Box, Flex, Text } from '@backstage/ui';
 import { entrySlug, scopeNavigation } from '@brnby/colophon-common';
 import {
   ColophonComponentsProvider,
@@ -7,15 +6,21 @@ import {
   ColophonNav,
   ColophonPageHeader,
   ColophonToc,
+  useAnchorScroll,
+  useColophonStyles,
+  useContainerWidth,
 } from '@brnby/plugin-colophon-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
 import { ChannelPicker } from './ChannelPicker';
 import { useMarkdownComponents } from './markdownComponents';
 import { StateMessage } from './StateMessage';
+
+/** Matches the 56rem container query that gives the navigation its column. */
+const NAV_BREAKPOINT = 56 * 16;
 
 export interface DocsBrowserProps {
   bundleId: string;
@@ -125,6 +130,26 @@ export function DocsBrowser({
     };
   }, [api, bundleId, activeSlug, resolved]);
 
+  // The fragment comes from the router rather than window.location: inside
+  // Backstage, an in-page anchor click is intercepted by react-aria and turned
+  // into a client-side navigation, so the router sees it and `hashchange`
+  // never fires.
+  useColophonStyles();
+
+  const { hash } = useLocation();
+  useAnchorScroll({ hash, ready: markdown !== undefined });
+
+  // Below the layout breakpoint the navigation is a closed disclosure, so the
+  // reader lands on the page they asked for rather than on a list of every
+  // other page. Above it, it is always open and its control is hidden.
+  const { ref: containerRef, width: containerWidth } = useContainerWidth();
+  const roomForNav =
+    containerWidth === undefined || containerWidth >= NAV_BREAKPOINT;
+  const [navOpen, setNavOpen] = useState(true);
+  useEffect(() => {
+    setNavOpen(roomForNav);
+  }, [roomForNav]);
+
   const components = useMarkdownComponents({
     bundleId,
     fromPath: page?.path ?? 'index.md',
@@ -151,51 +176,95 @@ export function DocsBrowser({
     );
   }
 
-  return (
-    <Flex gap="4" align="start">
-      <Box style={{ flex: '0 0 16rem' }}>
-        {onChannelChange && (
-          <ChannelPicker
-            bundleId={bundleId}
-            current={resolved.channel}
-            onChange={onChannelChange}
-          />
-        )}
-        <ColophonNav
-          nodes={nav}
-          activeSlug={activeSlug}
-          hrefForSlug={hrefForSlug}
+  const navigation = (
+    <>
+      {onChannelChange && (
+        <ChannelPicker
+          bundleId={bundleId}
+          current={resolved.channel}
+          onChange={onChannelChange}
         />
-      </Box>
-
-      <Box style={{ flex: '1 1 auto', minWidth: 0 }}>
-        {page && (
-          <ColophonPageHeader
-            title={page.title}
-            description={page.description}
-            type={page.type}
-            status={page.status}
-            updatedAt={resolved.updatedAt}
-          />
-        )}
-        {pageError && (
-          <StateMessage title="Could not load this page" error={pageError} />
-        )}
-        {markdown === undefined && !pageError && <Text>Loading…</Text>}
-        {markdown !== undefined && (
-          // Relative links and images resolve against the page they were
-          // written on, which the renderer cannot know on its own.
-          <ColophonComponentsProvider components={components}>
-            <ColophonMarkdown content={markdown} />
-          </ColophonComponentsProvider>
-        )}
-      </Box>
-
-      {page && page.headings.length > 0 && (
-        <Box style={{ flex: '0 0 14rem' }}>
-          <ColophonToc headings={page.headings} />
-        </Box>
       )}
-    </Flex>
+      <ColophonNav
+        nodes={nav}
+        activeSlug={activeSlug}
+        hrefForSlug={hrefForSlug}
+      />
+    </>
+  );
+
+  return (
+    // The container the stylesheet's container queries measure. Column counts
+    // live in CSS; only the disclosure's open state needs JavaScript, and it
+    // reads the same width so the two cannot disagree.
+    <div className="colophon-layout-container" ref={containerRef}>
+      <div className="colophon-layout">
+        <div className="colophon-layout-nav">
+          <details
+            className="colophon-nav-disclosure"
+            open={navOpen}
+            onToggle={event => setNavOpen(event.currentTarget.open)}
+          >
+            <summary>Pages</summary>
+            {navigation}
+          </details>
+        </div>
+
+        <div className="colophon-layout-main">
+          {page && (
+            <ColophonPageHeader
+              title={page.title}
+              description={page.description}
+              type={page.type}
+              status={page.status}
+              updatedAt={resolved.updatedAt}
+            />
+          )}
+          {pageError && (
+            <StateMessage title="Could not load this page" error={pageError} />
+          )}
+          {markdown === undefined && !pageError && <PageSkeleton />}
+          {markdown !== undefined && (
+            // Relative links and images resolve against the page they were
+            // written on, which the renderer cannot know on its own.
+            <ColophonComponentsProvider components={components}>
+              <ColophonMarkdown content={markdown} />
+            </ColophonComponentsProvider>
+          )}
+        </div>
+
+        {page && page.headings.length > 0 && (
+          <div className="colophon-layout-toc">
+            <ColophonToc headings={page.headings} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Placeholder shaped like the page that is loading.
+ *
+ * Reserves roughly the space the content will take, so its arrival does not
+ * shove everything below it down the screen — which is what the bare word
+ * "Loading…" did on every page change.
+ */
+function PageSkeleton() {
+  const widths = ['60%', '95%', '88%', '92%', '40%'];
+  return (
+    <div aria-hidden style={{ marginBlockStart: 'var(--bui-space-4)' }}>
+      {widths.map((width, index) => (
+        <div
+          key={width + String(index)}
+          className="colophon-skeleton"
+          style={{
+            width,
+            height: index === 0 ? '1.75rem' : '1rem',
+            marginBlockEnd: index === 0 ? '1.25rem' : '0.6rem',
+          }}
+        />
+      ))}
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Text } from '@backstage/ui';
 import type { Heading } from '@brnby/colophon-common';
+import { useColophonStyles } from '../styles';
 
 export interface ColophonTocProps {
   headings: Heading[];
@@ -19,6 +20,7 @@ export function ColophonToc({
   maxDepth = 3,
   label = 'On this page',
 }: ColophonTocProps) {
+  useColophonStyles();
   const shown = headings.filter(h => h.depth > 1 && h.depth <= maxDepth);
   if (shown.length === 0) {
     return null;

@@ -17,8 +17,24 @@ export function pageUrl(options: {
   anchor?: string;
   entityRef?: string;
 }): string {
-  const base = options.appBaseUrl.replace(/\/+$/, '');
+  return `${options.appBaseUrl.replace(/\/+$/, '')}${pagePath(options)}`;
+}
 
+/**
+ * The same location, app-relative.
+ *
+ * Backstage Search results are rendered with a router-aware Link, which sends
+ * an absolute URL to a new browser tab because it cannot know the origin is
+ * its own. Portal results therefore carry a path; only consumers OUTSIDE the
+ * app — the MCP tools, whose reader has no app to be inside — need the origin.
+ */
+export function pagePath(options: {
+  bundleId: string;
+  slug: string;
+  channel?: string;
+  anchor?: string;
+  entityRef?: string;
+}): string {
   // Both a bundle id and a slug contain slashes, so only one of them can live
   // in the path without becoming ambiguous. The bundle id takes the path,
   // because the frontend route is /colophon/* and reads the whole remainder as
@@ -40,7 +56,7 @@ export function pageUrl(options: {
 
   const search = query.toString();
   const anchor = options.anchor ? `#${encodeURIComponent(options.anchor)}` : '';
-  return `${base}${path}${search ? `?${search}` : ''}${anchor}`;
+  return `${path}${search ? `?${search}` : ''}${anchor}`;
 }
 
 function entityDocsPath(entityRef: string): string {

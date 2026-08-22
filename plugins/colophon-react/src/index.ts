@@ -30,6 +30,7 @@ export {
   useColophonComponents,
 } from './registry';
 export { colophonSanitizeSchema } from './sanitizeSchema';
+export { useColophonStyles } from './styles';
 export type {
   CodeBlockProps,
   CodeProps,
@@ -40,3 +41,7 @@ export type {
   ResolvedColophonComponents,
   TableProps,
 } from './types';
+export type { AnchorScrollOptions } from './useAnchorScroll';
+export { useAnchorScroll } from './useAnchorScroll';
+export type { ContainerWidth } from './useContainerWidth';
+export { useContainerWidth } from './useContainerWidth';

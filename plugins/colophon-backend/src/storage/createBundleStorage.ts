@@ -20,8 +20,13 @@ export function createBundleStorage(config: RootConfigService): BundleStorage {
   const type = storage?.getOptionalString('type') ?? 'local';
 
   if (type === 'local') {
+    // `directory`, matching what every piece of documentation says. This read
+    // `local.root` until a real backend was pointed at a real bundle: config
+    // keys nobody reads are silently dropped, so the storage fell back to its
+    // default root, publishes succeeded, and every read 404'd afterwards.
     const root =
-      storage?.getOptionalString('local.root') ?? DEFAULT_LOCAL_STORAGE_ROOT;
+      storage?.getOptionalString('local.directory') ??
+      DEFAULT_LOCAL_STORAGE_ROOT;
     return new LocalBundleStorage(root);
   }
 

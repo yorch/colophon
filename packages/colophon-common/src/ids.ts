@@ -70,6 +70,17 @@ export const DEFAULT_CHANNEL = 'latest';
  */
 export const COLOPHON_ANNOTATION = 'brnby.io/colophon';
 
+/**
+ * The Backstage Search document type for a documentation chunk.
+ *
+ * Lives here rather than in the backend that emits it, because the frontend
+ * has to name the same string to register a result renderer and a result-type
+ * filter for it. Two independent copies of a value that must match is the
+ * shape of a bug that shows up as "search works, but the results are
+ * unstyled and unfilterable" — with nothing failing anywhere.
+ */
+export const COLOPHON_DOCUMENT_TYPE = 'colophon';
+
 export interface BundleRef {
   bundleId: BundleId;
   /** Slug prefix this entity is scoped to, or undefined for the whole bundle. */

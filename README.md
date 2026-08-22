@@ -84,6 +84,7 @@ same page once per version.
 | `plugins/colophon-backend` | Storage, database, chunking, HTTP routes, search collator, MCP actions |
 | `plugins/colophon-react` | The markdown renderer and its component override registry |
 | `plugins/colophon` | Frontend plugin — entity docs tab and cross-repository docs home |
+| `dev-app/` | A real Backstage app for running all of the above locally. Never published |
 
 Everything negotiates through `colophon-common`. Changing it changes the wire
 format between all four consumers, so that package is where compatibility is
@@ -152,7 +153,9 @@ yarn verify        # lint + arch lint + typecheck + test
 | `yarn tsc` | Typecheck |
 | `yarn test` | Jest, single run |
 | `yarn test:watch` | Jest, watch mode |
-| `yarn build` | Build all packages |
+| `yarn build` | Build all packages (excludes the dev app) |
+| `yarn start` | Run the local Backstage app on :3000, backend on :7007 |
+| `yarn dev:seed` | Publish this repository's `docs/` into the running app |
 | `docker build -t colophon-cli .` | Build the publisher image |
 
 The publisher image runs against a mounted repository rather than baking
@@ -161,6 +164,31 @@ source in:
 ```bash
 docker run --rm -v "$PWD:/work" -w /work colophon-cli validate ./docs
 ```
+
+### Running it for real
+
+`dev-app/` is a Backstage app — frontend, backend, catalog, search — with
+Colophon installed. It exists because unit tests could not answer whether the
+plugin behaves in a deployment, and the answer turned out to be "not quite":
+building it surfaced a documented config key the backend never read, a page
+route that 404'd at every URL, and a sidebar entry that never appeared.
+
+```bash
+yarn start        # first terminal
+yarn dev:seed     # second terminal, once the backend is up
+```
+
+Then open <http://localhost:3000/colophon>, or the **Docs** tab on the
+`colophon` component in the catalog.
+
+The seed publishes this repository's own `docs/` through the real CLI, so the
+app shows the documentation you are reading. Publishing is two steps — blobs
+to storage, then an HTTP call registering the revision — which is why the app
+has to be running before you seed.
+
+Everything is local: SQLite in memory, bundles under `colophon-data/`, guest
+sign-in. Guest is a real identity rather than disabled auth, so Colophon's
+authorizer still runs its catalog visibility check.
 
 ### On the two linters
 

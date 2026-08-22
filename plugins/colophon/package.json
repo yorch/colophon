@@ -29,9 +29,12 @@
     "@backstage/errors": "^1.3.1",
     "@backstage/frontend-plugin-api": "^0.18.0",
     "@backstage/plugin-catalog-react": "^3.2.1",
+    "@backstage/plugin-search-common": "^1.2.24",
+    "@backstage/plugin-search-react": "1.11.7",
     "@backstage/ui": "^0.17.0",
     "@brnby/colophon-common": "workspace:^",
-    "@brnby/plugin-colophon-react": "workspace:^"
+    "@brnby/plugin-colophon-react": "workspace:^",
+    "@material-ui/icons": "^4.9.1"
   },
   "peerDependencies": {
     "react": "^17.0.0 || ^18.0.0",

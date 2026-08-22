@@ -11,11 +11,14 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "plugins/*"
+      "plugins/*",
+      "dev-app/*"
     ]
   },
   "scripts": {
     "build": "backstage-cli repo build --all",
+    "start": "backstage-cli repo start",
+    "dev:seed": "node --require @backstage/cli/config/nodeTransform.cjs dev-app/backend/src/seed.ts",
     "clean": "backstage-cli repo clean",
     "test": "backstage-cli repo test --watch=false",
     "test:watch": "backstage-cli repo test",
@@ -24,7 +27,7 @@
     "tsc:full": "tsc --skipLibCheck false",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "lint:arch": "eslint --max-warnings 0 \"{packages,plugins}/*/src/**/*.{ts,tsx}\"",
+    "lint:arch": "eslint --max-warnings 0 \"{packages,plugins,dev-app}/*/src/**/*.{ts,tsx}\"",
     "verify": "yarn lint && yarn lint:arch && yarn tsc && yarn test"
   },
   "devDependencies": {
