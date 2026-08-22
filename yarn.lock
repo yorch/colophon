@@ -2715,7 +2715,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@backstage/plugin-search-react@npm:^1.11.7":
+"@backstage/plugin-search-react@npm:1.11.7, @backstage/plugin-search-react@npm:^1.11.7":
   version: 1.11.7
   resolution: "@backstage/plugin-search-react@npm:1.11.7"
   dependencies:
@@ -3140,6 +3140,8 @@ __metadata:
     "@backstage/frontend-plugin-api": "npm:^0.18.0"
     "@backstage/frontend-test-utils": "npm:^0.6.3"
     "@backstage/plugin-catalog-react": "npm:^3.2.1"
+    "@backstage/plugin-search-common": "npm:^1.2.24"
+    "@backstage/plugin-search-react": "npm:1.11.7"
     "@backstage/test-utils": "npm:^1.7.15"
     "@backstage/ui": "npm:^0.17.0"
     "@brnby/colophon-common": "workspace:^"

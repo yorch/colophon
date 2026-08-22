@@ -56,6 +56,14 @@ Only channel-pointed revisions are indexed, and only the default channel
 projects into Backstage Search — otherwise the portal search box returns the
 same page once per version.
 
+The two consumers of a chunk want it in different forms, and the projection
+is where they diverge. Agents get the stored markdown, because a table is
+worth more than a flattening of it, and an absolute URL, because they have no
+app to be inside. The portal gets plain text, because raw source puts table
+pipes and backticks in front of a reader, and an app-relative path, because
+Backstage renders results with a router-aware link that sends an absolute URL
+to a new browser tab.
+
 ## Chunking lives in the backend
 
 Retrieval chunks are cut at index time, not at publish time. Chunking strategy

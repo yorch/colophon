@@ -27,10 +27,7 @@ export {
 } from './permissions';
 export { colophonPlugin as default } from './plugin';
 export type { ColophonDocument } from './search/DefaultColophonCollatorFactory';
-export {
-  COLOPHON_DOCUMENT_TYPE,
-  DefaultColophonCollatorFactory,
-} from './search/DefaultColophonCollatorFactory';
+export { DefaultColophonCollatorFactory } from './search/DefaultColophonCollatorFactory';
 export { searchModuleColophonCollator } from './search/module';
 export type { DocsAuthorizer } from './service/authorize';
 export { createDocsAuthorizer } from './service/authorize';

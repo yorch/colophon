@@ -7,9 +7,10 @@ import {
   ColophonNav,
   ColophonPageHeader,
   ColophonToc,
+  useAnchorScroll,
 } from '@brnby/plugin-colophon-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
@@ -124,6 +125,13 @@ export function DocsBrowser({
       cancelled = true;
     };
   }, [api, bundleId, activeSlug, resolved]);
+
+  // The fragment comes from the router rather than window.location: inside
+  // Backstage, an in-page anchor click is intercepted by react-aria and turned
+  // into a client-side navigation, so the router sees it and `hashchange`
+  // never fires.
+  const { hash } = useLocation();
+  useAnchorScroll({ hash, ready: markdown !== undefined });
 
   const components = useMarkdownComponents({
     bundleId,

@@ -40,3 +40,5 @@ export type {
   ResolvedColophonComponents,
   TableProps,
 } from './types';
+export type { AnchorScrollOptions } from './useAnchorScroll';
+export { useAnchorScroll } from './useAnchorScroll';

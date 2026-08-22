@@ -9,15 +9,14 @@ import type {
   IndexableDocument,
 } from '@backstage/plugin-search-common';
 import {
+  COLOPHON_DOCUMENT_TYPE,
   type DocStatus,
   type DocType,
   isWithinSubpath,
 } from '@brnby/colophon-common';
+import { plainText } from '../indexing/plainText';
 import { colophonDocsReadPermission } from '../permissions';
-import { pageUrl } from '../service/links';
-
-/** The document type Colophon contributes to the portal search index. */
-export const COLOPHON_DOCUMENT_TYPE = 'colophon';
+import { pagePath } from '../service/links';
 
 export interface ColophonDocument extends IndexableDocument {
   bundleId: string;
@@ -90,18 +89,15 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
   readonly #discovery: DiscoveryService;
   readonly #auth: AuthService;
   readonly #logger: LoggerService;
-  readonly #appBaseUrl: string;
 
   constructor(options: {
     discovery: DiscoveryService;
     auth: AuthService;
     logger: LoggerService;
-    appBaseUrl: string;
   }) {
     this.#discovery = options.discovery;
     this.#auth = options.auth;
     this.#logger = options.logger;
-    this.#appBaseUrl = options.appBaseUrl;
   }
 
   async getCollator(): Promise<Readable> {
@@ -172,9 +168,11 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
 
     return {
       title: breadcrumb[breadcrumb.length - 1] ?? row.page_title,
-      text: row.text,
-      location: pageUrl({
-        appBaseUrl: this.#appBaseUrl,
+      // Plain text, not the stored markdown: this is the snippet a person
+      // reads in the portal. The MCP tools keep the markdown, because an
+      // agent wants the table rather than a flattening of it.
+      text: plainText(row.text),
+      location: pagePath({
         bundleId: row.bundle_id,
         slug: row.slug,
         channel: row.channel,

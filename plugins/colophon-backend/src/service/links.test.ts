@@ -1,4 +1,4 @@
-import { pageUrl } from './links';
+import { pagePath, pageUrl } from './links';
 
 const BASE = 'https://portal.example.com';
 const BUNDLE = 'github.com/org/repo';
@@ -81,5 +81,41 @@ describe('pageUrl', () => {
         }
       }
     }
+  });
+});
+
+/**
+ * The portal and the agent surface need the SAME location in two forms, and
+ * the difference is not cosmetic: Backstage renders a search result with a
+ * router-aware Link, which cannot tell that an absolute URL points at its own
+ * origin. Give it one and every documentation result opens in a new browser
+ * tab, flagged "Opens in a new window" — while agents, who have no app to be
+ * inside, need exactly that absolute form.
+ */
+describe('pagePath', () => {
+  const path = (over: Partial<Parameters<typeof pagePath>[0]> = {}) =>
+    pagePath({ bundleId: BUNDLE, slug: '', ...over });
+
+  it('is app-relative, so the router treats it as internal', () => {
+    expect(path()).toBe(`/colophon/${BUNDLE}`);
+    expect(path()).not.toContain('://');
+  });
+
+  it('is exactly pageUrl without the origin', () => {
+    // One implementation, two renderings — so a change to routing cannot
+    // apply to the portal and not to agents, or the other way round.
+    for (const over of [
+      {},
+      { slug: 'guides/deploy' },
+      { slug: 'a', channel: '1.x' },
+      { slug: 'a', anchor: 'rotate-credentials' },
+      { entityRef: 'component:default/api', slug: 'a' },
+    ]) {
+      expect(url(over)).toBe(`${BASE}${path(over)}`);
+    }
+  });
+
+  it('keeps the fragment, which is the point of a search result', () => {
+    expect(path({ slug: 'a', anchor: 'chunking' })).toMatch(/#chunking$/);
   });
 });

@@ -10,6 +10,13 @@ import {
 // plugin-catalog-react, and is marked @alpha upstream — a known upgrade
 // checkpoint rather than a stable import.
 import { EntityContentBlueprint } from '@backstage/plugin-catalog-react/alpha';
+// Both search blueprints are @alpha upstream, like EntityContentBlueprint —
+// another known upgrade checkpoint.
+import {
+  SearchFilterResultTypeBlueprint,
+  SearchResultListItemBlueprint,
+} from '@backstage/plugin-search-react/alpha';
+import { COLOPHON_DOCUMENT_TYPE } from '@brnby/colophon-common';
 import MenuBookIcon from '@material-ui/icons/MenuBook';
 import { isColophonAvailable } from './annotation';
 import { ColophonClient, colophonApiRef } from './api';
@@ -73,7 +80,47 @@ const colophonPage = PageBlueprint.make({
   },
 });
 
+/**
+ * Documentation as a first-class result type in portal search.
+ *
+ * Two extensions because they answer two different questions. The filter is
+ * what puts "Documentation" beside "Software Catalog" in the result-type
+ * panel — without it, docs are searchable but cannot be searched FOR, since
+ * there is no way to narrow to them. The list item is what renders a hit as
+ * a section of a page rather than an anonymous blob of text.
+ */
+const colophonSearchResultType = SearchFilterResultTypeBlueprint.make({
+  name: 'colophon',
+  params: {
+    value: COLOPHON_DOCUMENT_TYPE,
+    name: 'Documentation',
+    icon: <MenuBookIcon />,
+  },
+});
+
+const colophonSearchResultItem = SearchResultListItemBlueprint.make({
+  name: 'colophon',
+  params: {
+    // Scoped by predicate: without one the blueprint renders EVERY result
+    // type, so catalog entities would be drawn by the documentation renderer.
+    predicate: result => result.type === COLOPHON_DOCUMENT_TYPE,
+    icon: <MenuBookIcon />,
+    component: async () => {
+      const { ColophonSearchResultItem } = await import(
+        './components/ColophonSearchResultItem'
+      );
+      return ColophonSearchResultItem;
+    },
+  },
+});
+
 export const colophonPlugin = createFrontendPlugin({
   pluginId: 'colophon',
-  extensions: [colophonApi, colophonEntityContent, colophonPage],
+  extensions: [
+    colophonApi,
+    colophonEntityContent,
+    colophonPage,
+    colophonSearchResultType,
+    colophonSearchResultItem,
+  ],
 });
