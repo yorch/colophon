@@ -202,7 +202,7 @@ Requires Node 22 or 24 and Yarn 4 (via corepack).
 ```bash
 corepack enable
 yarn install
-yarn verify        # lint + arch lint + typecheck + test
+yarn verify        # lint + arch lint + site lint + typecheck + test
 ```
 
 | Command | What it does |
@@ -210,6 +210,7 @@ yarn verify        # lint + arch lint + typecheck + test
 | `yarn lint` | Biome — formatting and general lint |
 | `yarn lint:fix` | Biome, applying fixes |
 | `yarn lint:arch` | ESLint, Backstage dependency-hygiene rules only |
+| `yarn lint:site` | Check the `site/` pages still share one header, footer and theme wiring |
 | `yarn tsc` | Typecheck |
 | `yarn test` | Jest, single run |
 | `yarn test:watch` | Jest, watch mode |

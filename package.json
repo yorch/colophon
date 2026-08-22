@@ -28,7 +28,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:arch": "eslint --max-warnings 0 \"{packages,plugins,dev-app}/*/src/**/*.{ts,tsx}\"",
-    "verify": "yarn lint && yarn lint:arch && yarn tsc && yarn test",
+    "lint:site": "node scripts/check-site-chrome.mjs",
+    "verify": "yarn lint && yarn lint:arch && yarn lint:site && yarn tsc && yarn test",
     "changeset": "changeset",
     "version-packages": "changeset version && yarn install --no-immutable",
     "release": "yarn tsc && yarn build && node scripts/check-packables.mjs && changeset publish --tag next"
