@@ -1,6 +1,6 @@
 {
   "name": "@brnby/plugin-colophon-react",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared Colophon React surface — the markdown renderer and its component override registry.",
   "license": "MIT",
   "main": "src/index.ts",

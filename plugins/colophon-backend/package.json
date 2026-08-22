@@ -1,6 +1,6 @@
 {
   "name": "@brnby/plugin-colophon-backend",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Colophon backend — bundle storage, channels, search indexing, and MCP actions.",
   "license": "MIT",
   "main": "src/index.ts",
