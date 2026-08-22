@@ -90,6 +90,45 @@ Only channel-pointed revisions are indexed, and only the default channel
 projects into Backstage Search — otherwise the portal search box returns the
 same page once per version.
 
+## Installing
+
+Nothing is on `latest` yet — releases go out under the `next` dist-tag while
+the bundle contract is still moving.
+
+```bash
+# In your Backstage app
+yarn workspace backend add @brnby/plugin-colophon-backend@next
+yarn workspace app add @brnby/plugin-colophon@next
+```
+
+**Backend** — `packages/backend/src/index.ts`:
+
+```ts
+import { searchModuleColophonCollator } from '@brnby/plugin-colophon-backend';
+
+backend.add(import('@brnby/plugin-colophon-backend'));
+// Only if you want documentation in portal-wide search.
+backend.add(searchModuleColophonCollator);
+```
+
+**Frontend** (New Frontend System) — `packages/app/src/App.tsx`:
+
+```tsx
+import colophonPlugin from '@brnby/plugin-colophon';
+
+const app = createApp({ features: [colophonPlugin] });
+```
+
+**Config** — merge [`app-config.colophon.yaml`](app-config.colophon.yaml) into
+your `app-config.yaml`. Every key is documented in
+[configuration](https://yorch.github.io/colophon/getting-started.html).
+
+**Publishing from CI** — the CLI needs no installation:
+
+```bash
+npx @brnby/colophon-cli@next publish ./docs --bundle-id github.com/org/repo
+```
+
 ## Layout
 
 | Path | Purpose |
@@ -154,6 +193,9 @@ shown rather than truncating silently.
 [mcp]: https://backstage.io/docs/ai/mcp-actions/
 
 ## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for changesets, the release process and
+the pull request checklist.
 
 Requires Node 22 or 24 and Yarn 4 (via corepack).
 

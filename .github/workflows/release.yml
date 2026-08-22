@@ -1,0 +1,124 @@
+# Publishes the packages to npm.
+#
+# Two-step by design. A push to main that carries changesets makes this open a
+# "Version Packages" pull request: version bumps, updated interdependencies and
+# generated changelogs, as a diff to review. Merging that pull request is what
+# publishes. Nothing reaches npm without a human approving the version numbers,
+# and an npm version cannot be unpublished after 72 hours.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  # npm trusted publishing. Lets the job mint an OIDC token so npm can verify
+  # the release came from this workflow in this repository, with no long-lived
+  # credential and a provenance attestation on the published package.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Changesets compares against the base branch to decide what to
+          # release, which a shallow clone cannot answer.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: yarn install --immutable
+
+      # The same checks main is already required to pass. Publishing is the one
+      # action in this repository that cannot be undone, so it does not inherit
+      # trust from an earlier run.
+      - name: Verify
+        run: yarn verify
+
+      - uses: changesets/action@v1
+        id: changesets
+        with:
+          version: yarn version-packages
+          publish: yarn release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+          # The five packages share one version, so the default — a tag and a
+          # GitHub release for each — would be five near-identical entries per
+          # version, and nothing to point at when someone asks what is in
+          # 0.1.0. One consolidated release is created below instead.
+          #
+          # This also stops the action pushing tags at all: in its source
+          # `pushTag` sits inside the `createGithubReleases` branch. The step
+          # below therefore pushes the tag as well as creating the release.
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No npm credential, deliberately. Publishing authenticates with the
+          # OIDC token minted by `id-token: write` above, which Yarn exchanges
+          # itself from 4.9.0 onwards.
+          #
+          # npm cannot configure a trusted publisher for a package that does
+          # not exist yet (npm/cli#8544), so the first publish of each package
+          # is done from a maintainer's machine with `yarn npm login` and a
+          # real 2FA prompt — see CONTRIBUTING.md. That is a deliberate
+          # alternative to a bypass-2FA token living in this repository's
+          # secrets: it removes the credential rather than guarding it.
+
+      # One release for the version, not one per package — the five share a
+      # version, so the default would be five near-identical entries and
+      # nothing to link to when someone asks what is in 0.1.0.
+      #
+      # `gh` rather than an action: GitHub's own actions/create-release has
+      # been archived since 2021, and the CLI is both maintained and already
+      # on the runner. It creates the tag itself when one does not exist,
+      # which is why there is no git tag/push here.
+      - name: Tag and release
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          set -euo pipefail
+
+          # The fixed group's premise is one version across all five. If that
+          # ever stops holding, fail loudly rather than labelling the tag with
+          # whichever version happens to come first.
+          versions=$(jq -r '[.[].version] | unique | .[]' <<< "$PUBLISHED")
+          if [ "$(printf '%s' "$versions" | grep -c '^')" -ne 1 ]; then
+            echo "Expected one version across the fixed group, got:" >&2
+            jq -r '.[] | "  \(.name)@\(.version)"' <<< "$PUBLISHED" >&2
+            echo >&2
+            echo 'Check the "fixed" group in .changeset/config.json.' >&2
+            exit 1
+          fi
+
+          # A fixed group shares its changesets, so one package's entry is the
+          # release notes and the other four would repeat it. Stop at the next
+          # heading so older versions do not leak in.
+          awk -v v="$versions" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found
+          ' packages/colophon-common/CHANGELOG.md > release-notes.md
+
+          {
+            printf '\n### Packages\n\n'
+            jq -r '.[] | "- `\(.name)@\(.version)` — https://www.npmjs.com/package/\(.name)/v/\(.version)"' <<< "$PUBLISHED"
+          } >> release-notes.md
+
+          gh release create "v$versions" \
+            --title "v$versions" \
+            --notes-file release-notes.md

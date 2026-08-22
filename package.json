@@ -2,7 +2,7 @@
   "name": "colophon",
   "version": "0.1.0",
   "private": true,
-  "description": "Markdown documentation for the Backstage software catalog \u2014 rendered for humans, exposed as MCP tools for agents.",
+  "description": "Markdown documentation for the Backstage software catalog — rendered for humans, exposed as MCP tools for agents.",
   "license": "MIT",
   "packageManager": "yarn@4.13.0",
   "engines": {
@@ -28,13 +28,18 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:arch": "eslint --max-warnings 0 \"{packages,plugins,dev-app}/*/src/**/*.{ts,tsx}\"",
-    "verify": "yarn lint && yarn lint:arch && yarn tsc && yarn test"
+    "verify": "yarn lint && yarn lint:arch && yarn tsc && yarn test",
+    "changeset": "changeset",
+    "version-packages": "changeset version && yarn install --no-immutable",
+    "release": "yarn tsc && yarn build && node scripts/check-packables.mjs && changeset publish --tag next"
   },
   "devDependencies": {
     "@backstage/cli": "^0.36.4",
     "@backstage/cli-defaults": "^0.1.4",
     "@backstage/eslint-plugin": "^0.3.1",
     "@biomejs/biome": "^2.5.8",
+    "@changesets/changelog-github": "^1.0.0",
+    "@changesets/cli": "^3.0.1",
     "@jest/environment-jsdom-abstract": "^30.4.1",
     "@types/jest": "^30",
     "@types/jsdom": "^27",

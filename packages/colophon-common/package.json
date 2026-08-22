@@ -1,7 +1,7 @@
 {
   "name": "@brnby/colophon-common",
-  "version": "0.1.0",
-  "description": "The Colophon bundle contract \u2014 manifest schema, identifiers, and storage key layout shared by the CLI, backend, and frontend.",
+  "version": "0.0.0",
+  "description": "The Colophon bundle contract — manifest schema, identifiers, and storage key layout shared by the CLI, backend, and frontend.",
   "license": "MIT",
   "main": "src/index.ts",
   "types": "src/index.ts",

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "yorch/colophon" }],
+  "commit": false,
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "fixed": [
+    [
+      "@brnby/colophon-common",
+      "@brnby/colophon-cli",
+      "@brnby/plugin-colophon",
+      "@brnby/plugin-colophon-react",
+      "@brnby/plugin-colophon-backend"
+    ]
+  ],
+  "ignore": []
+}
