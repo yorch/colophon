@@ -3,6 +3,21 @@
   "version": "0.1.0",
   "description": "Colophon frontend plugin — entity docs tab and cross-repository docs home.",
   "license": "MIT",
+  "keywords": [
+    "backstage",
+    "backstage-plugin",
+    "colophon",
+    "documentation",
+    "docs-as-code",
+    "markdown"
+  ],
+  "homepage": "https://yorch.github.io/colophon/",
+  "bugs": "https://github.com/yorch/colophon/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yorch/colophon.git",
+    "directory": "plugins/colophon"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {

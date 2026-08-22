@@ -3,6 +3,22 @@
   "version": "0.1.0",
   "description": "Shared Colophon React surface — the markdown renderer and its component override registry.",
   "license": "MIT",
+  "keywords": [
+    "backstage",
+    "colophon",
+    "documentation",
+    "markdown",
+    "react",
+    "renderer",
+    "mermaid"
+  ],
+  "homepage": "https://yorch.github.io/colophon/",
+  "bugs": "https://github.com/yorch/colophon/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yorch/colophon.git",
+    "directory": "plugins/colophon-react"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {
