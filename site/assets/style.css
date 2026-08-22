@@ -840,6 +840,11 @@ td code {
   background: var(--bg-alt);
   padding: 0.85rem;
   position: relative;
+  /* How much room the mock UI has is a question about the mock, not about the
+     page: two of these share a `.grid` row, so a roomy-looking 768px page
+     hands each one a frame narrower than a phone gets. Querying the mock's own
+     width is what lets the body below stack on the answer. */
+  container-type: inline-size;
 }
 
 .mock-label {
@@ -877,6 +882,12 @@ td code {
   padding: 0.6rem 0.85rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-alt);
+  /* The frame clips rather than scrolls, so a row that outgrows it loses its
+     last chips outright — the channel picker was showing a bisected "pr-42"
+     wherever the mock column fell below ~290px. Wrapping is the only one of
+     the three outcomes that keeps every chip readable. */
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
 }
 
 .mock-title {
@@ -999,6 +1010,21 @@ td code {
   letter-spacing: 0.04em;
 }
 
+/* The side columns are fixed, so they claim ~19rem between them before the
+   content column gets anything, and below this threshold what is left stops
+   reading as a third pane. It stopped being one entirely at a 768px page,
+   where the middle column collapsed to 8px and printed "mermaid diagram —
+   themed" a letter per line over the column beside it, while the frame's
+   `overflow: hidden` cut "platform#services/billing" off mid-word. Chosen to
+   sit just under the widest mock that still renders three panes, so the
+   layouts that were already fine keep them. */
+@container (max-width: 28rem) {
+  .mock-body,
+  .mock-body--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ------------------------------------------------------------------ cards */
 
 .grid {
@@ -1107,16 +1133,66 @@ a.card:hover {
   .shell {
     padding: 0 18px;
   }
+}
 
+/* Its own breakpoint, wider than the one above, because it answers a question
+   about the header's contents rather than about the page: measured, the brand,
+   the whole nav and both controls stop fitting on one line at ~845px, and the
+   margin here covers system fonts wider than the one measured on.
+
+   Left to flex wrapping the two controls dropped to a third line of their own,
+   under the nav and hard against the left edge — three unrelated strips, and
+   150px of permanently sticky chrome on a 390px phone. Placing the rows by
+   grid area instead keeps the controls beside the brand and hands the nav the
+   second row on its own.
+
+   This block must stay after the one above: both set properties on the shell
+   and its header, and the header's are the ones that should win. */
+@media (max-width: 880px) {
   .header-inner {
-    padding-bottom: 0.4rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "brand repo theme"
+      "nav   nav  nav";
+    align-items: center;
+    gap: 0.3rem 0.6rem;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
   }
 
-  .mock-body {
-    grid-template-columns: minmax(0, 1fr);
+  .brand {
+    grid-area: brand;
   }
 
-  .mock-body--two {
-    grid-template-columns: minmax(0, 1fr);
+  .repo-link {
+    grid-area: repo;
+  }
+
+  .theme-toggle {
+    grid-area: theme;
+  }
+
+  .site-nav {
+    grid-area: nav;
+    /* The auto margin that pushes the nav rightwards on a wide header would
+       collapse it against the controls' edge here, where it owns the row. */
+    margin-left: 0;
+    /* A row of its own is room enough to wrap, and wrapping is what keeps
+       every item visible — including the current page's, which on the last
+       two pages sat outside the scrolled strip. Overlay scrollbars never
+       advertised that the strip scrolled at all. */
+    overflow-x: visible;
+  }
+
+  .site-nav ul {
+    flex-wrap: wrap;
+    row-gap: 0.15rem;
+  }
+
+  /* The sticky header is two rows tall here, so an anchored target needs more
+     clearance than the single row's 5rem buys it. */
+  [id] {
+    scroll-margin-top: 8.5rem;
   }
 }
