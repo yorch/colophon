@@ -59,6 +59,13 @@ version bumps, the updated interdependency ranges and the generated changelogs.
 first: an npm version cannot be unpublished after 72 hours, so this is the last
 point at which a mistake is cheap.
 
+A successful publish also pushes a single `v0.1.0`-style git tag and creates
+one GitHub release for it, covering all five packages. Changesets would
+otherwise tag and release each package separately — five near-identical entries
+per version, and nothing to link to when someone asks what is in a version.
+Note that its `createGithubReleases` flag also controls whether tags are pushed
+at all, which is why `scripts/github-release.mjs` pushes the tag itself.
+
 Releases currently go out under the `next` dist-tag, so `npm install
 @brnby/plugin-colophon` resolves to nothing while the bundle contract is still
 moving. To promote a version once you are ready to stand behind it:

@@ -53,11 +53,21 @@ jobs:
         run: yarn verify
 
       - uses: changesets/action@v1
+        id: changesets
         with:
           version: yarn version-packages
           publish: yarn release
           commit: 'chore: version packages'
           title: 'chore: version packages'
+          # The five packages share one version, so the default — a tag and a
+          # GitHub release for each — would be five near-identical entries per
+          # version, and nothing to point at when someone asks what is in
+          # 0.1.0. One consolidated release is created below instead.
+          #
+          # This also stops the action pushing tags at all: in its source
+          # `pushTag` sits inside the `createGithubReleases` branch. The step
+          # below therefore pushes the tag as well as creating the release.
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Only needed to BOOTSTRAP. npm cannot configure a trusted publisher
@@ -66,3 +76,10 @@ jobs:
           # exists and has a trusted publisher configured, delete the secret
           # and this line — OIDC takes over and leaves nothing to rotate.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag and release
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: node scripts/github-release.mjs
