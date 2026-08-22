@@ -59,6 +59,19 @@ version bumps, the updated interdependency ranges and the generated changelogs.
 first: an npm version cannot be unpublished after 72 hours, so this is the last
 point at which a mistake is cheap.
 
+Two things about that pull request are expected and not faults:
+
+- **It needs no changeset.** It is the pull request that *consumes* them, so it
+  changes five published packages and has none left. CI skips the changeset
+  check for `changeset-release/*` branches.
+- **CI does not run on it automatically.** GitHub does not trigger workflows for
+  a pull request opened with the default `GITHUB_TOKEN`, to stop workflows
+  recursing — it shows as `action_required`. Approve the run if you want it, or
+  do not: the release job re-runs `yarn verify` before it publishes anything,
+  precisely so publishing does not inherit trust from an earlier run. Making it
+  run automatically means giving the bot a personal access token, which
+  reintroduces the credential this setup exists to avoid.
+
 A successful publish also creates a single `v0.1.0`-style tag and one GitHub
 release covering all five packages. Changesets would otherwise tag and release
 each package separately — five near-identical entries per version, and nothing
