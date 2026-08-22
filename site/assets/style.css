@@ -325,9 +325,13 @@ strong {
   font-weight: 600;
 }
 
-/* --------------------------------------------------------- theme toggle */
+/* ------------------------------------------------- header controls */
 
-.theme-toggle {
+/* The repository link and the theme toggle are the same shape: a 34px square
+   sitting at the end of the header. Sharing the rule rather than copying it
+   is what keeps them the same after the next change to either. */
+.theme-toggle,
+.repo-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -342,13 +346,15 @@ strong {
   cursor: pointer;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.repo-link:hover {
   background: var(--bg-alt);
   color: var(--fg);
   border-color: var(--border-strong);
 }
 
-.theme-toggle:focus-visible {
+.theme-toggle:focus-visible,
+.repo-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -357,6 +363,17 @@ strong {
   width: 17px;
   height: 17px;
   display: none;
+}
+
+/* An anchor, not a button, so it inherits link decoration that the shared
+   rule above does not clear. */
+.repo-link {
+  text-decoration: none;
+}
+
+.repo-link svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* Which glyph shows follows the same three-way logic as the palette, so the
