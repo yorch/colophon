@@ -1,5 +1,22 @@
 # @brnby/colophon-cli
 
+## 0.1.1
+
+### Patch Changes
+
+- [#7](https://github.com/yorch/colophon/pull/7) [`e1617cf`](https://github.com/yorch/colophon/commit/e1617cf1293fa666088fab4ed4549852ebb126f2) Thanks [@yorch](https://github.com/yorch)! - Give each published package its own README, LICENSE and npm metadata.
+  
+  Only the repository root had a README, and npm renders the README it finds in
+  the tarball — so all five package pages were blank, with no repository link, no
+  link to the documentation site, and nothing to find them by in search.
+  
+  Each package now carries a README written for someone landing on its npm page
+  rather than on the repository, plus `repository` (with the `directory` field
+  that makes npm link into the right subdirectory), `homepage`, `bugs` and
+  keywords.
+- Updated dependencies [[`e1617cf`](https://github.com/yorch/colophon/commit/e1617cf1293fa666088fab4ed4549852ebb126f2)]:
+  - @brnby/colophon-common@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

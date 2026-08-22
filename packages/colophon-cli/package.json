@@ -1,6 +1,6 @@
 {
   "name": "@brnby/colophon-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Publishes a docs/ tree as a Colophon bundle.",
   "license": "MIT",
   "keywords": [
