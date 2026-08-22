@@ -3,6 +3,22 @@
   "version": "0.1.0",
   "description": "Colophon backend — bundle storage, channels, search indexing, and MCP actions.",
   "license": "MIT",
+  "keywords": [
+    "backstage",
+    "backstage-plugin",
+    "colophon",
+    "documentation",
+    "markdown",
+    "mcp",
+    "search"
+  ],
+  "homepage": "https://yorch.github.io/colophon/",
+  "bugs": "https://github.com/yorch/colophon/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yorch/colophon.git",
+    "directory": "plugins/colophon-backend"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {

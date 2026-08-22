@@ -3,6 +3,22 @@
   "version": "0.1.0",
   "description": "The Colophon bundle contract — manifest schema, identifiers, and storage key layout shared by the CLI, backend, and frontend.",
   "license": "MIT",
+  "keywords": [
+    "backstage",
+    "colophon",
+    "documentation",
+    "docs-as-code",
+    "markdown",
+    "manifest",
+    "schema"
+  ],
+  "homepage": "https://yorch.github.io/colophon/",
+  "bugs": "https://github.com/yorch/colophon/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yorch/colophon.git",
+    "directory": "packages/colophon-common"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "publishConfig": {
