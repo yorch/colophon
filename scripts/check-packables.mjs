@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Refuses to publish a package that would ship nothing, and leaves no
- * half-packed manifests behind if it fails.
+ * Refuses to publish a package that would ship nothing or carry the
+ * placeholder version, and leaves no half-packed manifests behind if it fails.
  *
  * `npm publish` does not care whether a tarball has any files in it. A
  * workspace whose `dist/` was never built packs down to a single
@@ -13,6 +13,18 @@
  * produces exactly that, since `dist/` is gitignored and `prepack` needs
  * type declarations that only `yarn tsc` emits. Ordering the release steps
  * correctly fixes it today; this fails loudly if anyone reorders them later.
+ *
+ * The version check exists for the same reason, from the same accident.
+ * `0.0.0` is what these manifests hold when no release has happened yet, and
+ * a release run that never picked up the version bump publishes exactly that
+ * — five packages at 0.0.0, which npm then also points `latest` at, because
+ * the first publish of a package always sets it whatever `--tag` says. That
+ * happened. Undoing it needed an unpublish inside npm's 72-hour window.
+ *
+ * Note what is deliberately NOT checked: whether the version is already on
+ * the registry. `changeset publish` skips versions it finds there, and two
+ * things depend on that — the no-op release run after a local publish, and
+ * re-running a release that failed partway through its packages.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, renameSync } from 'node:fs';
@@ -75,9 +87,28 @@ for (const { location, name } of publishable) {
   }
 }
 
+/** What the manifests hold before any release has been made. */
+const PLACEHOLDER_VERSION = '0.0.0';
+
 const failures = [];
 
-for (const { location, name } of publishable) {
+const placeholders = publishable.filter(
+  ({ manifest }) => manifest.version === PLACEHOLDER_VERSION,
+);
+if (placeholders.length > 0) {
+  process.stderr.write(
+    `\nRefusing to publish at ${PLACEHOLDER_VERSION}:\n` +
+      `${placeholders.map(({ name }) => `  - ${name}`).join('\n')}\n\n` +
+      'That is the placeholder these manifests carry until a release bumps\n' +
+      'them, so the version bump has not been applied to this working tree.\n' +
+      'Run `yarn version-packages`, or take the version commit the release\n' +
+      'workflow prepared, and check the version before publishing again — npm\n' +
+      'will not let the number be reused.\n',
+  );
+  process.exit(1);
+}
+
+for (const { location, name, manifest } of publishable) {
   let output;
   try {
     output = execFileSync('yarn', ['pack', '--dry-run', '--json'], {
@@ -108,7 +139,11 @@ for (const { location, name } of publishable) {
       `${name} would publish ${entries.length} file(s) and nothing under dist/`,
     );
   } else {
-    process.stdout.write(`  ${name}: ${shipped.length} files under dist/\n`);
+    // The version is printed because it is the thing a human is meant to
+    // recognise as wrong, and it was invisible here when it mattered.
+    process.stdout.write(
+      `  ${name}@${manifest.version}: ${shipped.length} files under dist/\n`,
+    );
   }
 }
 

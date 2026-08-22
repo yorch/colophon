@@ -96,6 +96,18 @@ that is now spent. `scripts/check-packables.mjs` refuses to publish a package
 with nothing under `dist/`, so a reordering of those steps fails loudly rather
 than silently shipping nothing.
 
+It also refuses to publish anything still at `0.0.0`. That is the placeholder
+these manifests carry until a release bumps them, so seeing it means the
+version bump never reached the working tree — which is how five packages once
+went out as `0.0.0`, with `latest` pointing at them, because npm sets `latest`
+on a package's first publish whatever `--tag` says. Undoing it took an
+unpublish inside npm's 72-hour window.
+
+What it deliberately does not check is whether a version is already on the
+registry. `changeset publish` skips those, and two things rely on it: the
+no-op release run after a local publish, and re-running a release that failed
+partway through its packages.
+
 It also puts back any manifest left half-rewritten. Packing runs `prepack`,
 which points `main` and `types` at `dist/`, and `postpack` swaps them back —
 but only if the pack reaches the end. Since this runs locally as part of
