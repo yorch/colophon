@@ -50,7 +50,6 @@ jobs:
         run: yarn verify
 
       - uses: changesets/action@v1
-        id: changesets
         with:
           version: yarn version-packages
           publish: yarn release
@@ -86,24 +85,59 @@ jobs:
       # been archived since 2021, and the CLI is both maintained and already
       # on the runner. It creates the tag itself when one does not exist,
       # which is why there is no git tag/push here.
+      #
+      # Deliberately *not* gated on `steps.changesets.outputs.published`, and
+      # deliberately not fed by `publishedPackages`. The action derives both by
+      # regex-matching `New tag: <pkg>@<version>` lines out of the publish
+      # script's stdout (`src/run.ts`), and changesets v3 stopped printing that
+      # line — it reports `◇ Successfully published:` from a progress UI now.
+      # So 0.1.1 went to npm with `published` still reading `false` and this
+      # step skipped, in a run that reported success. Nothing here parses
+      # another tool's console output any more: the version is read from the
+      # manifests, and the tag's existence is what says whether the release has
+      # already been made.
       - name: Tag and release
-        if: steps.changesets.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
           set -euo pipefail
 
+          # The version being released is whatever the manifests on the commit
+          # under test carry: merging the "chore: version packages" pull
+          # request is what bumps them, and this job is what publishes them.
+          # The fixed group in the changesets config is the list of packages
+          # that share it, so it stays the single source of truth for the five.
+          group=$(jq -c '.fixed[0]' .changeset/config.json)
+          packages=$(
+            yarn workspaces list --json |
+              jq -r --argjson group "$group" '
+                select(.name as $n | $group | index($n)) | .location
+              ' |
+              sort |
+              xargs -I{} jq -r '"\(.name) \(.version)"' {}/package.json
+          )
+          versions=$(awk '{ print $2 }' <<< "$packages" | sort -u)
+
           # The fixed group's premise is one version across all five. If that
-          # ever stops holding, fail loudly rather than labelling the tag with
+          # ever stops holding — or a name in the group no longer matches a
+          # workspace — fail loudly rather than labelling the tag with
           # whichever version happens to come first.
-          versions=$(jq -r '[.[].version] | unique | .[]' <<< "$PUBLISHED")
-          if [ "$(printf '%s' "$versions" | grep -c '^')" -ne 1 ]; then
+          if [ "$(wc -l <<< "$packages")" -ne "$(jq 'length' <<< "$group")" ] ||
+             [ "$(wc -l <<< "$versions")" -ne 1 ]; then
             echo "Expected one version across the fixed group, got:" >&2
-            jq -r '.[] | "  \(.name)@\(.version)"' <<< "$PUBLISHED" >&2
+            sed 's/^/  /' <<< "$packages" >&2
             echo >&2
             echo 'Check the "fixed" group in .changeset/config.json.' >&2
             exit 1
+          fi
+          tag="v$versions"
+
+          # The tag is the record of what has been released. Every push to main
+          # that does not bump the version finds it already there and stops,
+          # which is the same property that makes re-running a release safe.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released."
+            exit 0
           fi
 
           # A fixed group shares its changesets, so one package's entry is the
@@ -116,9 +150,13 @@ jobs:
 
           {
             printf '\n### Packages\n\n'
-            jq -r '.[] | "- `\(.name)@\(.version)` — https://www.npmjs.com/package/\(.name)/v/\(.version)"' <<< "$PUBLISHED"
+            awk '{ printf "- `%s@%s` — https://www.npmjs.com/package/%s/v/%s\n", $1, $2, $1, $2 }' <<< "$packages"
           } >> release-notes.md
 
-          gh release create "v$versions" \
-            --title "v$versions" \
+          # Pin the tag to the commit this job ran on. Without --target `gh`
+          # tags whatever the default branch points at when the call lands,
+          # which is a different commit if anything else merged meanwhile.
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "$tag" \
             --notes-file release-notes.md
