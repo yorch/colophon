@@ -1,6 +1,6 @@
 {
   "name": "@brnby/colophon-common",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The Colophon bundle contract — manifest schema, identifiers, and storage key layout shared by the CLI, backend, and frontend.",
   "license": "MIT",
   "keywords": [
