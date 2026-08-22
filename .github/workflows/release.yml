@@ -49,21 +49,27 @@ jobs:
       - name: Verify
         run: yarn verify
 
-      - uses: changesets/action@v1
+      # Pinned by commit rather than by the `v2` tag. A moving major tag is
+      # the exact vector of CVE-2025-30066, where tags v1 through v45.0.7 of
+      # a popular action were repointed at a commit that dumped runner memory
+      # into workflow logs. This job can mint an npm publishing token, so it
+      # is the last place to accept a dependency that can change underneath.
+      - uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
-          version: yarn version-packages
-          publish: yarn release
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
-          # The five packages share one version, so the default — a tag and a
-          # GitHub release for each — would be five near-identical entries per
-          # version, and nothing to point at when someone asks what is in
-          # 0.1.0. One consolidated release is created below instead.
-          #
-          # This also stops the action pushing tags at all: in its source
-          # `pushTag` sits inside the `createGithubReleases` branch. The step
-          # below therefore pushes the tag as well as creating the release.
-          createGithubReleases: false
+          version-script: yarn version-packages
+          publish-script: yarn release
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
+          # The five packages share one version, so a release per package
+          # would be five near-identical entries per version, and nothing to
+          # point at when someone asks what is in 0.1.0. One consolidated
+          # release is created below instead.
+          create-github-releases: false
+          # Independent of the above in v2 — in v1 the two were coupled, and
+          # turning releases off silently stopped tags being pushed at all.
+          # Off here for the same reason: per-package tags would contradict
+          # the single `v0.1.0`-style tag the step below creates.
+          push-git-tags: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No npm credential, deliberately. Publishing authenticates with the
