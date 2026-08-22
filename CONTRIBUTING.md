@@ -80,9 +80,16 @@ to link to when someone asks what is in a version.
 The release is made with the `gh` CLI rather than an action: GitHub's own
 `actions/create-release` has been archived since 2021, and `gh` is both
 maintained and already present on the runner. It creates the tag itself when
-one does not exist, which is just as well — changesets' `createGithubReleases`
-flag also governs whether tags are pushed at all, so turning the per-package
-releases off would otherwise have left no tags anywhere.
+one does not exist.
+
+`changesets/action` is pinned by commit rather than by its `v2` tag. A moving
+major tag is how CVE-2025-30066 worked — tags v1 through v45.0.7 of a popular
+action were repointed at a commit that dumped runner memory into workflow
+logs. This job can mint an npm publishing token, so it is the last place to
+accept a dependency that can change underneath. Upgrading is therefore a
+deliberate edit: bump the SHA and the trailing version comment together, and
+re-check the input names, because GitHub Actions **ignores unknown inputs
+silently** — every input was renamed between v1 and v2.
 
 That step works out what to release from the repository, not from the
 changesets action: the version comes from the manifests, the list of packages
