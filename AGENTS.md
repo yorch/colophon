@@ -34,8 +34,8 @@ layout or scrolling.
 
 ## Commands
 
-`yarn verify` is **the gate**. It is lint, architecture lint, typecheck and
-test, and it is exactly what CI runs.
+`yarn verify` is **the gate**. It is lint, architecture lint, site-chrome
+lint, typecheck and test, and it is exactly what CI runs.
 
 ```bash
 corepack enable
@@ -45,10 +45,11 @@ yarn verify
 
 | Command | What it does |
 | --- | --- |
-| `yarn verify` | `lint` + `lint:arch` + `tsc` + `test` — run before every commit |
+| `yarn verify` | `lint` + `lint:arch` + `lint:site` + `tsc` + `test` — run before every commit |
 | `yarn lint` | Biome — formatting and general lint |
 | `yarn lint:fix` | Biome, applying fixes |
 | `yarn lint:arch` | ESLint, Backstage dependency-hygiene rules only |
+| `yarn lint:site` | `scripts/check-site-chrome.mjs` — the five `site/` pages still share one header, footer and theme wiring |
 | `yarn tsc` | Typecheck |
 | `yarn test` | Jest, single run |
 | `yarn build` | Build all packages (excludes the dev app) |
