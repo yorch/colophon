@@ -20,8 +20,13 @@ This README is the short version — the site above covers each topic properly.
 
 ## Status
 
-Early development. Nothing is published yet and the bundle contract may still
-change without a schema version bump until `0.1.0` ships.
+Early development, but published: `0.1.1` is on npm under the `next` dist-tag.
+The bundle contract may still change without a schema version bump, so pin an
+exact version if you depend on it.
+
+A bare `npm install` currently resolves to `0.1.0`, not `0.1.1` — npm sets
+`latest` on a package's first publish whatever `--tag` says, and it stays put
+until moved deliberately. Ask for `@next` to get the current release.
 
 ## What it does
 
