@@ -59,12 +59,17 @@ version bumps, the updated interdependency ranges and the generated changelogs.
 first: an npm version cannot be unpublished after 72 hours, so this is the last
 point at which a mistake is cheap.
 
-A successful publish also pushes a single `v0.1.0`-style git tag and creates
-one GitHub release for it, covering all five packages. Changesets would
-otherwise tag and release each package separately — five near-identical entries
-per version, and nothing to link to when someone asks what is in a version.
-Note that its `createGithubReleases` flag also controls whether tags are pushed
-at all, which is why `scripts/github-release.mjs` pushes the tag itself.
+A successful publish also creates a single `v0.1.0`-style tag and one GitHub
+release covering all five packages. Changesets would otherwise tag and release
+each package separately — five near-identical entries per version, and nothing
+to link to when someone asks what is in a version.
+
+The release is made with the `gh` CLI rather than an action: GitHub's own
+`actions/create-release` has been archived since 2021, and `gh` is both
+maintained and already present on the runner. It creates the tag itself when
+one does not exist, which is just as well — changesets' `createGithubReleases`
+flag also governs whether tags are pushed at all, so turning the per-package
+releases off would otherwise have left no tags anywhere.
 
 Releases currently go out under the `next` dist-tag, so `npm install
 @brnby/plugin-colophon` resolves to nothing while the bundle contract is still
@@ -138,11 +143,14 @@ CI. Publishing locally removes the credential rather than guarding it.
    ```
 
 6. Create the consolidated GitHub release, which the workflow skipped because
-   it published nothing:
+   it published nothing. `gh` creates the tag as well when one does not
+   already exist:
 
    ```bash
-   PUBLISHED_PACKAGES='[{"name":"@brnby/colophon-common","version":"0.1.0"}, …]' \
-     node scripts/github-release.mjs
+   gh release create v0.1.0 --title v0.1.0 --notes-file <(
+     awk '/^## /{ if (f) exit; if ($2 == "0.1.0") { f = 1; next } } f' \
+       packages/colophon-common/CHANGELOG.md
+   )
    ```
 
 7. On npmjs.com, open each package's **Settings → Trusted publisher** and point

@@ -78,9 +78,47 @@ jobs:
           # alternative to a bypass-2FA token living in this repository's
           # secrets: it removes the credential rather than guarding it.
 
+      # One release for the version, not one per package — the five share a
+      # version, so the default would be five near-identical entries and
+      # nothing to link to when someone asks what is in 0.1.0.
+      #
+      # `gh` rather than an action: GitHub's own actions/create-release has
+      # been archived since 2021, and the CLI is both maintained and already
+      # on the runner. It creates the tag itself when one does not exist,
+      # which is why there is no git tag/push here.
       - name: Tag and release
         if: steps.changesets.outputs.published == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
-        run: node scripts/github-release.mjs
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          set -euo pipefail
+
+          # The fixed group's premise is one version across all five. If that
+          # ever stops holding, fail loudly rather than labelling the tag with
+          # whichever version happens to come first.
+          versions=$(jq -r '[.[].version] | unique | .[]' <<< "$PUBLISHED")
+          if [ "$(printf '%s' "$versions" | grep -c '^')" -ne 1 ]; then
+            echo "Expected one version across the fixed group, got:" >&2
+            jq -r '.[] | "  \(.name)@\(.version)"' <<< "$PUBLISHED" >&2
+            echo >&2
+            echo 'Check the "fixed" group in .changeset/config.json.' >&2
+            exit 1
+          fi
+
+          # A fixed group shares its changesets, so one package's entry is the
+          # release notes and the other four would repeat it. Stop at the next
+          # heading so older versions do not leak in.
+          awk -v v="$versions" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found
+          ' packages/colophon-common/CHANGELOG.md > release-notes.md
+
+          {
+            printf '\n### Packages\n\n'
+            jq -r '.[] | "- `\(.name)@\(.version)` — https://www.npmjs.com/package/\(.name)/v/\(.version)"' <<< "$PUBLISHED"
+          } >> release-notes.md
+
+          gh release create "v$versions" \
+            --title "v$versions" \
+            --notes-file release-notes.md
