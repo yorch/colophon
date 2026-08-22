@@ -95,21 +95,60 @@ than silently shipping nothing.
 
 npm cannot configure a trusted publisher for a package that does not exist yet
 ([npm/cli#8544](https://github.com/npm/cli/issues/8544)), so a brand-new
-package cannot be published over OIDC. Bootstrapping is:
+package cannot be published over OIDC. The first publish is therefore done
+from a maintainer's machine, with a real 2FA prompt.
 
-1. Add an npm **granular access token** as the `NPM_TOKEN` repository secret.
-   It must grant **read and write** on the `@brnby` **scope** — not on selected
-   packages, which cannot cover packages that do not exist yet.
-2. Let the Release workflow publish once. The token reaches npm through
-   `YARN_NPM_AUTH_TOKEN`, **not** `NODE_AUTH_TOKEN`: changesets detects the
-   workspace tool and publishes a Yarn Berry repo with `yarn npm publish`,
-   which reads Yarn's own configuration and ignores both `NODE_AUTH_TOKEN` and
-   the `.npmrc` that `actions/setup-node` writes.
-3. On npmjs.com, open each package's **Settings → Trusted publisher** and point
+The alternative — a token with **Bypass two-factor authentication** enabled,
+living in this repository's secrets — is what npm's own token page warns
+against. It is a bearer credential worth exactly as much to an attacker as to
+CI. Publishing locally removes the credential rather than guarding it.
+
+1. Create the npm organisation matching the package scope, if it does not
+   exist. `@brnby/x` needs an org named `brnby`; the free plan covers
+   unlimited public packages.
+
+2. Take the version bump by hand, since the bot's "chore: version packages"
+   pull request would publish through CI and CI cannot authenticate yet.
+   Close that pull request and run its work locally:
+
+   ```bash
+   git checkout main && git pull
+   yarn version-packages
+   ```
+
+3. Log in. This prompts for username, password and the 2FA one-time password,
+   and writes the token to your home folder — never into the project.
+
+   ```bash
+   yarn npm login
+   ```
+
+4. Publish. `changeset publish` asks for another one-time password if the
+   account requires one for writes.
+
+   ```bash
+   yarn release
+   ```
+
+5. Commit the version bump and push. The Release workflow will run, find every
+   version already on the registry, publish nothing and skip the release step.
+
+   ```bash
+   git add -A && git commit -m 'chore: version packages' && git push
+   ```
+
+6. Create the consolidated GitHub release, which the workflow skipped because
+   it published nothing:
+
+   ```bash
+   PUBLISHED_PACKAGES='[{"name":"@brnby/colophon-common","version":"0.1.0"}, …]' \
+     node scripts/github-release.mjs
+   ```
+
+7. On npmjs.com, open each package's **Settings → Trusted publisher** and point
    it at this repository and `.github/workflows/release.yml`.
-4. Delete the `NPM_TOKEN` secret and the `NODE_AUTH_TOKEN` line from the
-   workflow. OIDC takes over, and there is no longer a credential to rotate.
 
-After step 4 every release carries a provenance attestation linking the tarball
-to the commit and workflow that produced it. Yarn performs the OIDC exchange
+From then on every release runs from CI over OIDC, with a provenance
+attestation linking the tarball to the commit and workflow that produced it,
+and no credential anywhere to rotate or leak. Yarn performs the OIDC exchange
 itself from 4.9.0 onwards; this repository pins 4.13.0.

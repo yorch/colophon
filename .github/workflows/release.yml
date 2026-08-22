@@ -67,19 +67,16 @@ jobs:
           createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # YARN_NPM_AUTH_TOKEN, not NODE_AUTH_TOKEN: changesets detects the
-          # workspace tool and publishes a Yarn Berry repo with `yarn npm
-          # publish`, which reads Yarn's own config and ignores both
-          # NODE_AUTH_TOKEN and the .npmrc that actions/setup-node writes.
-          # Verified with `yarn config get npmAuthToken` under each.
+          # No npm credential, deliberately. Publishing authenticates with the
+          # OIDC token minted by `id-token: write` above, which Yarn exchanges
+          # itself from 4.9.0 onwards.
           #
-          # Only needed to BOOTSTRAP. npm cannot configure a trusted publisher
-          # for a package that does not exist yet (npm/cli#8544), so the very
-          # first publish of each package needs a token. Once every package
-          # exists and has a trusted publisher configured, delete the secret
-          # and this line — Yarn does the OIDC exchange itself from 4.9.0, and
-          # there is nothing left to rotate.
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # npm cannot configure a trusted publisher for a package that does
+          # not exist yet (npm/cli#8544), so the first publish of each package
+          # is done from a maintainer's machine with `yarn npm login` and a
+          # real 2FA prompt — see CONTRIBUTING.md. That is a deliberate
+          # alternative to a bypass-2FA token living in this repository's
+          # secrets: it removes the credential rather than guarding it.
 
       - name: Tag and release
         if: steps.changesets.outputs.published == 'true'
