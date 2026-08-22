@@ -14,7 +14,7 @@
       "!**/.yarn",
       "!**/coverage",
       "!tmp",
-      "!**/.claude",
+      "!.claude",
       "!**/*.d.ts"
     ]
   },
