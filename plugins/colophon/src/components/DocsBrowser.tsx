@@ -1,8 +1,6 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { entrySlug, scopeNavigation } from '@brnby/colophon-common';
 import {
-  ColophonComponentsProvider,
-  ColophonMarkdown,
   ColophonNav,
   ColophonPageHeader,
   ColophonToc,
@@ -16,7 +14,7 @@ import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
 import { ChannelPicker } from './ChannelPicker';
-import { useMarkdownComponents } from './markdownComponents';
+import { PageMarkdown } from './markdownComponents';
 import { StateMessage } from './StateMessage';
 
 /** Matches the 56rem container query that gives the navigation its column. */
@@ -150,12 +148,15 @@ export function DocsBrowser({
     setNavOpen(roomForNav);
   }, [roomForNav]);
 
-  const components = useMarkdownComponents({
-    bundleId,
-    fromPath: page?.path ?? 'index.md',
-    channel: resolved?.channel,
-    hrefForSlug,
-  });
+  const markdownContext = useMemo(
+    () => ({
+      bundleId,
+      fromPath: page?.path ?? 'index.md',
+      channel: resolved?.channel,
+      hrefForSlug,
+    }),
+    [bundleId, page?.path, resolved?.channel, hrefForSlug],
+  );
 
   if (error) {
     return <StateMessage title="Could not load documentation" error={error} />;
@@ -227,9 +228,7 @@ export function DocsBrowser({
           {markdown !== undefined && (
             // Relative links and images resolve against the page they were
             // written on, which the renderer cannot know on its own.
-            <ColophonComponentsProvider components={components}>
-              <ColophonMarkdown content={markdown} />
-            </ColophonComponentsProvider>
+            <PageMarkdown context={markdownContext} content={markdown} />
           )}
         </div>
 

@@ -19,5 +19,6 @@ CLI, which is the fastest way to notice when the developer experience is bad.
 - [Architecture](architecture.md) — why the pipeline is shaped this way
 - [Publishing](guides/publishing.md) — getting a repository's docs into Backstage
 - [Writing docs](guides/writing-docs.md) — conventions, frontmatter, and what agents need
+- [Customising rendering](guides/customising-rendering.md) — override slots, brand tokens, and the limits
 - [CLI reference](reference/cli.md) — publishing, retiring, and collecting garbage
 - [Configuration](reference/configuration.md) — every app-config key

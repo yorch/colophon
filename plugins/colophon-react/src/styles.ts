@@ -80,7 +80,7 @@ export const colophonMarkdownStyles = `
  * apart — there is only one source for "this is the page you are on". */
 .colophon-nav-list a[aria-current='page'] {
   background: var(--bui-bg-neutral-2);
-  box-shadow: inset 2px 0 0 var(--bui-fg-link);
+  box-shadow: inset 2px 0 0 var(--bui-accent-bg);
 }
 .colophon-toc-list { list-style: none; margin: 0; padding: 0; }
 .colophon-toc-link {
@@ -173,10 +173,16 @@ export const colophonMarkdownStyles = `
   padding: var(--bui-space-4);
   border: 1px solid var(--bui-border-1);
   border-radius: var(--bui-radius-3);
-  background: var(--bui-bg-surface-1);
+  background: var(--bui-bg-neutral-1);
 }
-.colophon-bundle-row:hover { border-color: var(--bui-border-2); background: var(--bui-bg-neutral-1); }
-.colophon-bundle-row:focus-within { outline: 2px solid var(--bui-fg-link); outline-offset: 2px; }
+.colophon-bundle-row:hover { border-color: var(--bui-border-2); background: var(--bui-bg-neutral-2); }
+/* --bui-ring is the only token Backstage UI defines for a focus indicator, and
+ * it is the one that survives a theme swap. An earlier revision named
+ * --bui-fg-link, which does not exist in @backstage/ui at all — so the outline
+ * resolved to nothing and keyboard users got no focus indicator here.
+ * styles.test.tsx now checks every token named here against the stylesheet
+ * @backstage/ui actually ships, because nothing else fails when one is wrong. */
+.colophon-bundle-row:focus-within { outline: 2px solid var(--bui-ring); outline-offset: 2px; }
 /* The title is the link; this stretches its hit area over the whole row.
  * Wrapping the row in an anchor instead would make the row's entire text —
  * title, description and bundle id — the link's accessible name, which is
@@ -206,12 +212,6 @@ export const colophonMarkdownStyles = `
 `;
 
 /**
- * Adds the stylesheet to the document exactly once.
- *
- * Idempotent by element id so that rendering many `ColophonMarkdown` instances
- * — a search-results page renders one per hit — does not accumulate style tags.
- */
-/**
  * React binding for {@link ensureColophonStyles}.
  *
  * Every component that emits a `colophon-` class calls this, rather than
@@ -226,6 +226,17 @@ export function useColophonStyles(): void {
   useEffect(() => ensureColophonStyles(), []);
 }
 
+/**
+ * Adds the stylesheet to the document exactly once.
+ *
+ * Idempotent by element id so that rendering many `ColophonMarkdown` instances
+ * — a search-results page renders one per hit — does not accumulate style tags.
+ *
+ * That id is {@link COLOPHON_STYLE_ELEMENT_ID}, and it is also the opt-out: an
+ * app that puts its own `<style>` under that id before Colophon renders keeps
+ * injection from ever happening, because this function only checks whether the
+ * id is taken.
+ */
 export function ensureColophonStyles(): void {
   if (typeof document === 'undefined') {
     return;

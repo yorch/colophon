@@ -6,7 +6,13 @@ import type {
   ImageProps,
   LinkProps,
 } from '@brnby/plugin-colophon-react';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  ColophonComponentsProvider,
+  ColophonMarkdown,
+  defaultColophonComponents,
+  useColophonComponents,
+} from '@brnby/plugin-colophon-react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { colophonApiRef } from '../api';
 
 export interface MarkdownContext {
@@ -19,35 +25,88 @@ export interface MarkdownContext {
 }
 
 /**
- * Link and image overrides that resolve relative references.
+ * Which page is being rendered, for the components rendering inside it.
  *
- * The renderer deliberately hands hrefs through as authored, because
- * resolution needs routing context it does not have. This is the consumer
- * that has it — and until it existed, every `[x](./y.md)` and every
- * `![](_assets/z.png)` in every published page resolved against the browser's
- * path and 404'd, even though the publisher had verified both.
+ * Passed through context rather than through props so that an ADOPTER's `link`
+ * override — which Colophon never sees and cannot hand props to — can resolve
+ * relative references the same way the built-in one does, by calling
+ * {@link useColophonReference}.
  */
-export function useMarkdownComponents(
-  context: MarkdownContext,
-): ColophonComponents {
-  return useMemo(
-    () => ({
-      link: props => <ResolvedLink {...props} context={context} />,
-      image: props => <ResolvedImage {...props} context={context} />,
-    }),
-    [context],
-  );
+const MarkdownPageContext = createContext<MarkdownContext | undefined>(
+  undefined,
+);
+
+/** Where a markdown reference points once resolved against its page. */
+export interface ColophonReference {
+  /**
+   * How the authored reference was classified. `external` targets leave the
+   * portal and want the usual `target="_blank"` tabnabbing guard; `anchor`
+   * targets must stay bare fragments so the browser scrolls natively.
+   */
+  kind: 'external' | 'anchor' | 'page' | 'asset';
+  /**
+   * The href or src to use. Undefined while an asset URL is still being
+   * looked up, and for an asset whose lookup failed.
+   */
+  href: string | undefined;
 }
 
-function ResolvedLink({
-  href,
-  title,
-  children,
-  context,
-}: LinkProps & { context: MarkdownContext }) {
-  const resolved = href
-    ? resolveReference(context.fromPath, href)
-    : { kind: 'external' as const, href: '' };
+/**
+ * Resolves a markdown href or src against the page it was authored on.
+ *
+ * This is the piece an adopter needs and could not previously get. The
+ * renderer hands hrefs through exactly as written, because resolution needs
+ * routing context it does not have — so `[x](./y.md)` and `![](_assets/z.png)`
+ * are meaningless until something that knows the current page rewrites them.
+ * An override that skips this step silently breaks every relative link on
+ * every page, which is a trap rather than an extension point.
+ *
+ * Outside a Colophon page there is no context to resolve against, so the
+ * reference is passed through untouched rather than guessed at.
+ */
+export function useColophonReference(reference?: string): ColophonReference {
+  const page = useContext(MarkdownPageContext);
+  const resolved = useMemo(
+    () =>
+      page && reference
+        ? resolveReference(page.fromPath, reference)
+        : ({ kind: 'external', href: reference ?? '' } as const),
+    [page, reference],
+  );
+
+  const assetUrl = useAssetUrl(
+    page,
+    resolved.kind === 'asset' ? resolved.path : undefined,
+  );
+
+  if (resolved.kind === 'anchor') {
+    return { kind: 'anchor', href: `#${resolved.anchor}` };
+  }
+  if (resolved.kind === 'asset') {
+    return { kind: 'asset', href: assetUrl };
+  }
+  if (resolved.kind === 'page' && page) {
+    const base = page.hrefForSlug(resolved.slug);
+    return {
+      kind: 'page',
+      href: resolved.anchor ? `${base}#${resolved.anchor}` : base,
+    };
+  }
+  return { kind: 'external', href: reference };
+}
+
+function ResolvedLink({ href, title, children }: LinkProps) {
+  const resolved = useColophonReference(href);
+
+  if (resolved.kind === 'anchor') {
+    // Left as a plain fragment so the browser scrolls natively. Routing it
+    // would resolve the anchor against the current path instead.
+    return (
+      <a className="colophon-toc-link" href={resolved.href} title={title}>
+        {children}
+      </a>
+    );
+  }
 
   if (resolved.kind === 'external') {
     return (
@@ -57,72 +116,22 @@ function ResolvedLink({
     );
   }
 
-  if (resolved.kind === 'anchor') {
-    // Left as a plain fragment so the browser scrolls natively. Routing it
-    // would resolve the anchor against the current path instead.
-    return (
-      <a
-        className="colophon-toc-link"
-        href={`#${resolved.anchor}`}
-        title={title}
-      >
-        {children}
-      </a>
-    );
-  }
-
-  if (resolved.kind === 'page') {
-    const base = context.hrefForSlug(resolved.slug);
-    return (
-      <Link
-        href={resolved.anchor ? `${base}#${resolved.anchor}` : base}
-        title={title}
-      >
-        {children}
-      </Link>
-    );
-  }
-
   return (
-    <AssetLink path={resolved.path} title={title} context={context}>
-      {children}
-    </AssetLink>
-  );
-}
-
-function AssetLink({
-  path,
-  title,
-  children,
-  context,
-}: {
-  path: string;
-  title?: string;
-  children: React.ReactNode;
-  context: MarkdownContext;
-}) {
-  const href = useAssetUrl(context, path);
-  return (
-    <Link href={href ?? '#'} title={title}>
+    <Link href={resolved.href ?? '#'} title={title}>
       {children}
     </Link>
   );
 }
 
-function ResolvedImage({
-  src,
-  alt,
-  title,
-  context,
-}: ImageProps & { context: MarkdownContext }) {
-  const resolved = src
-    ? resolveReference(context.fromPath, src)
-    : { kind: 'external' as const, href: '' };
-  const assetPath = resolved.kind === 'asset' ? resolved.path : undefined;
-  const assetUrl = useAssetUrl(context, assetPath);
-
+function ResolvedImage({ src, alt, title }: ImageProps) {
+  const resolved = useColophonReference(src);
+  // A page or an in-page anchor is a document, not an image. Leaving the src
+  // empty renders the alt text; pointing an <img> at markdown renders a
+  // broken-image icon and hides the alt text behind it.
   const finalSrc =
-    resolved.kind === 'external' ? resolved.href : (assetUrl ?? undefined);
+    resolved.kind === 'external' || resolved.kind === 'asset'
+      ? resolved.href
+      : undefined;
 
   return (
     <img
@@ -136,6 +145,54 @@ function ResolvedImage({
 }
 
 /**
+ * Link and image overrides that resolve relative references — but only for the
+ * slots the app has not claimed.
+ *
+ * These used to be installed unconditionally as the innermost provider, which
+ * meant an adopter's `link` or `image` override was always shadowed: five of
+ * the seven slots were overridable and these two silently were not.
+ *
+ * The registry merges outer-to-inner, and Colophon's provider is necessarily
+ * the inner one — the app's provider is an ancestor, and the context carries
+ * only the merged result, so there is no way to re-apply the app's overrides
+ * on top from in here. Composition is therefore done by asking instead: a slot
+ * still holding the shipped default is unclaimed, so Colophon fills it; a slot
+ * holding anything else belongs to the app and is left alone. That adopter's
+ * component resolves references by calling {@link useColophonReference}.
+ */
+function useResolvingComponents(): ColophonComponents {
+  const ambient = useColophonComponents();
+  const ownsLink = ambient.link === defaultColophonComponents.link;
+  const ownsImage = ambient.image === defaultColophonComponents.image;
+
+  // `undefined` is how the registry spells "leave this slot as it is".
+  return useMemo(
+    () => ({
+      link: ownsLink ? ResolvedLink : undefined,
+      image: ownsImage ? ResolvedImage : undefined,
+    }),
+    [ownsLink, ownsImage],
+  );
+}
+
+export interface PageMarkdownProps {
+  context: MarkdownContext;
+  content: string;
+}
+
+/** One page of markdown, with its relative references resolvable. */
+export function PageMarkdown({ context, content }: PageMarkdownProps) {
+  const components = useResolvingComponents();
+  return (
+    <MarkdownPageContext.Provider value={context}>
+      <ColophonComponentsProvider components={components}>
+        <ColophonMarkdown content={content} />
+      </ColophonComponentsProvider>
+    </MarkdownPageContext.Provider>
+  );
+}
+
+/**
  * Asset URLs come from the API client rather than being built here.
  *
  * The client owns the URL shape, including the bucket prefix and the channel
@@ -144,27 +201,29 @@ function ResolvedImage({
  * place; pages carry few enough images for the extra effect to be irrelevant.
  */
 function useAssetUrl(
-  context: MarkdownContext,
+  context: MarkdownContext | undefined,
   path: string | undefined,
 ): string | undefined {
   const api = useApi(colophonApiRef);
   const [url, setUrl] = useState<string>();
+  const bundleId = context?.bundleId;
+  const channel = context?.channel;
 
   useEffect(() => {
-    if (!path) {
+    if (!path || !bundleId) {
       setUrl(undefined);
       return undefined;
     }
     let cancelled = false;
     api
-      .assetUrl(context.bundleId, path, context.channel)
+      .assetUrl(bundleId, path, channel)
       .then(next => !cancelled && setUrl(next))
       // A broken image is a broken image; it must not take the page down.
       .catch(() => !cancelled && setUrl(undefined));
     return () => {
       cancelled = true;
     };
-  }, [api, context.bundleId, context.channel, path]);
+  }, [api, bundleId, channel, path]);
 
   return url;
 }
