@@ -2,7 +2,20 @@ import { renderInTestApp } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
 import { screen } from '@testing-library/react';
 import { ColophonComponentsProvider } from '../registry';
-import type { CodeBlockProps, CodeProps, LinkProps } from '../types';
+import type { SanitizeSchema } from '../sanitizeSchema';
+import { colophonSanitizeSchema } from '../sanitizeSchema';
+import type {
+  BlockquoteProps,
+  CodeBlockProps,
+  CodeProps,
+  LinkProps,
+  ListItemProps,
+  ListProps,
+  ParagraphProps,
+  TableCellProps,
+  TableHeadProps,
+  TableRowProps,
+} from '../types';
 import { ColophonMarkdown } from './ColophonMarkdown';
 
 describe('ColophonMarkdown', () => {
@@ -180,6 +193,254 @@ describe('ColophonMarkdown', () => {
 
       expect(screen.queryByTestId('plantuml')).toBeNull();
       expect(container.querySelector('pre')).toHaveClass('colophon-code-block');
+    });
+  });
+
+  describe('block-level overrides', () => {
+    it('uses an overridden blockquote, which is what admonitions need', async () => {
+      const Callout = ({ children }: BlockquoteProps) => (
+        <aside data-testid="callout">{children}</aside>
+      );
+
+      const { container } = await renderInTestApp(
+        <ColophonComponentsProvider components={{ blockquote: Callout }}>
+          <ColophonMarkdown content={'> Careful.\n'} />
+        </ColophonComponentsProvider>,
+      );
+
+      expect(screen.getByTestId('callout')).toHaveTextContent('Careful.');
+      expect(container.querySelector('blockquote')).toBeNull();
+    });
+
+    it('uses an overridden paragraph', async () => {
+      const Lead = ({ children }: ParagraphProps) => (
+        <p data-testid="lead">{children}</p>
+      );
+
+      await renderInTestApp(
+        <ColophonComponentsProvider components={{ paragraph: Lead }}>
+          <ColophonMarkdown content={'Just prose.\n'} />
+        </ColophonComponentsProvider>,
+      );
+
+      expect(screen.getByTestId('lead')).toHaveTextContent('Just prose.');
+    });
+
+    it('tells an overridden list whether it is ordered, and where it starts', async () => {
+      const Listing = ({ ordered, start, children }: ListProps) => (
+        <ol data-testid={ordered ? 'ordered' : 'unordered'} start={start}>
+          {children}
+        </ol>
+      );
+
+      await renderInTestApp(
+        <ColophonComponentsProvider components={{ list: Listing }}>
+          <ColophonMarkdown content={'- a\n\n<!-- -->\n\n3. c\n'} />
+        </ColophonComponentsProvider>,
+      );
+
+      expect(screen.getByTestId('unordered')).not.toHaveAttribute('start');
+      expect(screen.getByTestId('ordered')).toHaveAttribute('start', '3');
+    });
+
+    it('hands a list item the task-list class it would otherwise lose', async () => {
+      // An override that drops this renders a checkbox with a bullet beside
+      // it, because the rule that hides the marker keys off the class.
+      const Item = ({ className, children }: ListItemProps) => (
+        <li data-testid="item" className={className}>
+          {children}
+        </li>
+      );
+
+      await renderInTestApp(
+        <ColophonComponentsProvider components={{ listItem: Item }}>
+          <ColophonMarkdown content={'- [x] done\n'} />
+        </ColophonComponentsProvider>,
+      );
+
+      expect(screen.getByTestId('item')).toHaveClass('task-list-item');
+    });
+
+    it('uses overridden table interior components', async () => {
+      const Head = ({ children }: TableHeadProps) => (
+        <thead data-testid="head">{children}</thead>
+      );
+      const Row = ({ children }: TableRowProps) => (
+        <tr data-testid="row">{children}</tr>
+      );
+      const Cell = ({ header, align, children }: TableCellProps) =>
+        header ? (
+          <th data-testid="header-cell" style={{ textAlign: align }}>
+            {children}
+          </th>
+        ) : (
+          <td data-testid="body-cell" style={{ textAlign: align }}>
+            {children}
+          </td>
+        );
+
+      await renderInTestApp(
+        <ColophonComponentsProvider
+          components={{ tableHead: Head, tableRow: Row, tableCell: Cell }}
+        >
+          <ColophonMarkdown content={'| Option |\n| --: |\n| `retries` |\n'} />
+        </ColophonComponentsProvider>,
+      );
+
+      expect(screen.getByTestId('head')).toBeInTheDocument();
+      expect(screen.getAllByTestId('row')).toHaveLength(2);
+      // The GFM delimiter row's alignment reaches the override, which is the
+      // only place it can be honoured — the shipped stylesheet's
+      // `text-align: start` beats the `align` attribute the default emits.
+      expect(screen.getByTestId('header-cell')).toHaveStyle({
+        textAlign: 'right',
+      });
+      expect(screen.getByTestId('body-cell')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The pair of props from the same change, tested together on purpose.
+   *
+   * A remark plugin emits into the Markdown tree, which is UPSTREAM of the
+   * sanitiser — so a plugin whose output the schema does not allow is
+   * stripped on the way out and the page renders as though the plugin were
+   * never passed. Shipping `remarkPlugins` without `sanitizeSchema` would be
+   * an extension point that silently does nothing, so both directions are
+   * asserted here.
+   */
+  describe('pipeline extension', () => {
+    /** Turns every blockquote into an `<aside class="admonition">`. */
+    const remarkAdmonition = () => (tree: unknown) => {
+      const visit = (node: unknown): void => {
+        if (typeof node !== 'object' || node === null) {
+          return;
+        }
+        const element = node as {
+          type?: string;
+          data?: Record<string, unknown>;
+          children?: unknown[];
+        };
+        if (element.type === 'blockquote') {
+          element.data = {
+            ...element.data,
+            hName: 'aside',
+            hProperties: { className: ['admonition'] },
+          };
+        }
+        for (const child of element.children ?? []) {
+          visit(child);
+        }
+      };
+      visit(tree);
+    };
+
+    /**
+     * Adds a class to every `em`, downstream of the sanitiser.
+     *
+     * `em` because it has no override slot: a slot's props are a fixed
+     * contract, so anything a rehype plugin hangs on an element the renderer
+     * remaps — a heading, a table cell — stops at that contract and never
+     * reaches the DOM. Inline formatting passes straight through.
+     */
+    const rehypeMarkEmphasis = () => (tree: unknown) => {
+      const visit = (node: unknown): void => {
+        if (typeof node !== 'object' || node === null) {
+          return;
+        }
+        const element = node as {
+          tagName?: string;
+          properties?: Record<string, unknown>;
+          children?: unknown[];
+        };
+        if (element.tagName === 'em') {
+          element.properties = { ...element.properties, className: ['marked'] };
+        }
+        for (const child of element.children ?? []) {
+          visit(child);
+        }
+      };
+      visit(tree);
+    };
+
+    // Annotated, not inferred: an attribute rule is a tuple, and an
+    // unannotated object literal widens it to string[][] — which the schema
+    // type then rejects.
+    const admonitionSchema: SanitizeSchema = {
+      ...colophonSanitizeSchema,
+      tagNames: [...(colophonSanitizeSchema.tagNames ?? []), 'aside'],
+      attributes: {
+        ...colophonSanitizeSchema.attributes,
+        aside: [['className', 'admonition']],
+      },
+    };
+
+    it('renders what a remark plugin emits once the schema allows it', async () => {
+      const { container } = await renderInTestApp(
+        <ColophonMarkdown
+          content={'> Rotate the key first.\n'}
+          remarkPlugins={[remarkAdmonition]}
+          sanitizeSchema={admonitionSchema}
+        />,
+      );
+
+      const aside = container.querySelector('aside');
+      expect(aside).toHaveClass('admonition');
+      expect(aside).toHaveTextContent('Rotate the key first.');
+    });
+
+    it('strips that same output when the schema is left alone', async () => {
+      const { container } = await renderInTestApp(
+        <ColophonMarkdown
+          content={'> Rotate the key first.\n'}
+          remarkPlugins={[remarkAdmonition]}
+        />,
+      );
+
+      // The text survives — only the element the plugin added is gone, which
+      // is why this failure mode reads as "the plugin did not run".
+      expect(container.querySelector('aside')).toBeNull();
+      expect(screen.getByText('Rotate the key first.')).toBeInTheDocument();
+    });
+
+    it('keeps remark-gfm rather than replacing the built-in plugins', async () => {
+      await renderInTestApp(
+        <ColophonMarkdown
+          content={'| Option |\n| --- |\n| a |\n'}
+          remarkPlugins={[remarkAdmonition]}
+        />,
+      );
+
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    it('runs rehype plugins after sanitisation, so their output is kept', async () => {
+      await renderInTestApp(
+        <ColophonMarkdown
+          content={'## Rotating *credentials*\n'}
+          rehypePlugins={[rehypeMarkEmphasis]}
+        />,
+      );
+
+      // A class the sanitiser's allow-list does not permit, kept because the
+      // plugin ran after it.
+      expect(screen.getByText('credentials')).toHaveClass('marked');
+      // And the sanitise/slug pair still ran first: the id is unprefixed,
+      // which is what keeps it equal to the manifest's recorded anchor.
+      expect(
+        screen.getByRole('heading', { name: 'Rotating credentials' }),
+      ).toHaveAttribute('id', 'rotating-credentials');
+    });
+
+    it('still sanitises with a schema an adopter widened', async () => {
+      const { container } = await renderInTestApp(
+        <ColophonMarkdown
+          content={'<script>window.pwned = true;</script>\n\ntext\n'}
+          sanitizeSchema={admonitionSchema}
+        />,
+      );
+
+      expect(container.querySelector('script')).toBeNull();
     });
   });
 });

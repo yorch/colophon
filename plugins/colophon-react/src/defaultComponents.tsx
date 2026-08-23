@@ -2,13 +2,20 @@ import { Link, Text } from '@backstage/ui';
 import type { ComponentType } from 'react';
 import { MermaidDiagram } from './components/MermaidDiagram';
 import type {
+  BlockquoteProps,
   CodeBlockProps,
   CodeProps,
   HeadingProps,
   ImageProps,
   LinkProps,
+  ListItemProps,
+  ListProps,
+  ParagraphProps,
   ResolvedColophonComponents,
+  TableCellProps,
+  TableHeadProps,
   TableProps,
+  TableRowProps,
 } from './types';
 
 const HEADING_TAGS = {
@@ -93,6 +100,41 @@ function DefaultHeading({ depth, id, children }: HeadingProps) {
   );
 }
 
+function DefaultParagraph({ children }: ParagraphProps) {
+  return <p>{children}</p>;
+}
+
+function DefaultBlockquote({ children }: BlockquoteProps) {
+  return <blockquote>{children}</blockquote>;
+}
+
+function DefaultList({ ordered, start, children }: ListProps) {
+  return ordered ? <ol start={start}>{children}</ol> : <ul>{children}</ul>;
+}
+
+function DefaultListItem({ className, children }: ListItemProps) {
+  return <li className={className}>{children}</li>;
+}
+
+function DefaultTableHead({ children }: TableHeadProps) {
+  return <thead>{children}</thead>;
+}
+
+function DefaultTableRow({ children }: TableRowProps) {
+  return <tr>{children}</tr>;
+}
+
+function DefaultTableCell({ header, align, children }: TableCellProps) {
+  // Inline rather than a class, because it has to beat the stylesheet's
+  // `text-align: start` on every cell that did not ask for an alignment.
+  const style = align ? { textAlign: align } : undefined;
+  return header ? (
+    <th style={style}>{children}</th>
+  ) : (
+    <td style={style}>{children}</td>
+  );
+}
+
 function DefaultTable({ children }: TableProps) {
   // Wide reference tables are the norm in docs; scrolling the table instead of
   // the page keeps the layout intact on narrow viewports.
@@ -122,6 +164,13 @@ export const defaultColophonComponents: ResolvedColophonComponents = {
   link: DefaultLink,
   image: DefaultImage,
   heading: DefaultHeading,
+  paragraph: DefaultParagraph,
+  blockquote: DefaultBlockquote,
+  list: DefaultList,
+  listItem: DefaultListItem,
   table: DefaultTable,
+  tableHead: DefaultTableHead,
+  tableRow: DefaultTableRow,
+  tableCell: DefaultTableCell,
   codeLanguages: defaultCodeLanguages,
 };
