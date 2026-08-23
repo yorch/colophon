@@ -20,8 +20,8 @@ install that plugin instead; it depends on this one.
 yarn workspace app add @brnby/plugin-colophon-react
 ```
 
-Releases go out under both the `latest` and `next` dist-tags; both currently
-point at `0.1.0`.
+Releases go out under the `latest` dist-tag, so a plain install gets the
+current version.
 
 React 17 or 18 is a peer dependency.
 

@@ -26,13 +26,11 @@ copy to trust when the two disagree.
 
 ## Status
 
-Early development, but published: `0.1.1` is on npm under the `next` dist-tag.
+Early development, but published: the five packages are
+[on npm](https://www.npmjs.com/package/@brnby/plugin-colophon) under `latest`,
+versioned and released together, so a plain install gets the current release.
 The bundle contract may still change without a schema version bump, so pin an
 exact version if you depend on it.
-
-A bare `npm install` currently resolves to `0.1.0`, not `0.1.1` — npm sets
-`latest` on a package's first publish whatever `--tag` says, and it stays put
-until moved deliberately. Ask for `@next` to get the current release.
 
 ## What it does
 
@@ -103,13 +101,12 @@ same page once per version.
 
 ## Installing
 
-Nothing is on `latest` yet — releases go out under the `next` dist-tag while
-the bundle contract is still moving.
+Releases go out under the `latest` dist-tag, so there is no tag to ask for:
 
 ```bash
 # In your Backstage app
-yarn workspace backend add @brnby/plugin-colophon-backend@next
-yarn workspace app add @brnby/plugin-colophon@next
+yarn workspace backend add @brnby/plugin-colophon-backend
+yarn workspace app add @brnby/plugin-colophon
 ```
 
 **Backend** — `packages/backend/src/index.ts`:
@@ -137,7 +134,7 @@ your `app-config.yaml`. Every key is documented in
 **Publishing from CI** — the CLI needs no installation:
 
 ```bash
-npx @brnby/colophon-cli@next publish ./docs --bundle-id github.com/org/repo
+npx @brnby/colophon-cli publish ./docs --bundle-id github.com/org/repo
 ```
 
 ## Layout

@@ -21,8 +21,8 @@ someone else's generated HTML.
 yarn workspace app add @brnby/plugin-colophon
 ```
 
-Releases go out under both the `latest` and `next` dist-tags; both currently
-point at `0.1.0`.
+Releases go out under the `latest` dist-tag, so a plain install gets the
+current version.
 
 This is a **New Frontend System** plugin, and a default export.
 `packages/app/src/App.tsx`:

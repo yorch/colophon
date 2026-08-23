@@ -19,8 +19,8 @@ the database.
 yarn workspace backend add @brnby/plugin-colophon-backend
 ```
 
-Releases go out under both the `latest` and `next` dist-tags; both currently
-point at `0.1.0`.
+Releases go out under the `latest` dist-tag, so a plain install gets the
+current version.
 
 `packages/backend/src/index.ts`:
 

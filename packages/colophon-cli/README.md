@@ -27,8 +27,8 @@ Add it as a dependency only if you want the library surface below:
 yarn add @brnby/colophon-cli
 ```
 
-Releases go out under both the `latest` and `next` dist-tags; both currently
-point at `0.1.0`.
+Releases go out under the `latest` dist-tag, so a plain install gets the
+current version.
 
 ## validate
 
