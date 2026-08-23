@@ -184,6 +184,16 @@
               pre-commit hook. Add <code>--strict</code> to turn advisory diagnostics —
               chiefly a missing page <code>description</code> — into failures.
             </p>
+            <p>
+              Retiring is the other half, and it is not covered here:
+              <code>colophon delete-channel</code> closes a per-pull-request preview,
+              <code>colophon delete-bundle</code> removes a decommissioned repository, and
+              <code>colophon gc</code> reclaims the storage neither of them touches. Every
+              command and every flag is in
+              <a href="https://github.com/yorch/colophon/blob/main/docs/reference/cli.md"
+                >the CLI reference</a
+              >.
+            </p>
           </section>
 
           <!-- -------------------------------------------------- 03 config -->
@@ -255,8 +265,18 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
     minChars: 200
 
   schedule:
-    frequency: { minutes: 10 }
-    timeout: { minutes: 15 }</code></pre>
+    <span class="cm"># Re-reads the catalog for brnby.io/colophon annotations. Cheap — run it</span>
+    <span class="cm"># often, because until it does a newly annotated entity has no docs tab.</span>
+    entityLinks:
+      frequency: { minutes: 10 }
+      timeout: { minutes: 5 }
+      initialDelay: { seconds: 15 }
+    <span class="cm"># Projects documentation into Backstage Search. Expensive: it pages the</span>
+    <span class="cm"># whole corpus over HTTP, so it wants to run far less often.</span>
+    searchIndex:
+      frequency: { minutes: 60 }
+      timeout: { minutes: 30 }
+      initialDelay: { seconds: 60 }</code></pre>
             </figure>
 
             <div class="table-wrap bleed">
@@ -272,8 +292,8 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
                 <tbody>
                   <tr>
                     <th scope="row"><code>storage.type</code></th>
-                    <td>yes</td>
-                    <td>—</td>
+                    <td>no</td>
+                    <td><code>local</code></td>
                     <td><code>s3</code> or <code>local</code></td>
                   </tr>
                   <tr>
@@ -284,14 +304,14 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
                   </tr>
                   <tr>
                     <th scope="row"><code>storage.s3.region</code></th>
-                    <td>when <code>s3</code></td>
+                    <td>no</td>
                     <td>AWS SDK default</td>
                     <td></td>
                   </tr>
                   <tr>
                     <th scope="row"><code>storage.local.directory</code></th>
-                    <td>when <code>local</code></td>
-                    <td>—</td>
+                    <td>no</td>
+                    <td><code>./colophon-storage</code></td>
                     <td>Development only</td>
                   </tr>
                   <tr>
@@ -328,6 +348,17 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
               <a href="agents.html#auth">the agent-facing page</a> for that block and for
               per-user OAuth. A complete example lives at
               <code>app-config.colophon.yaml</code> in the repository.
+            </p>
+            <p class="note">
+              The table above is the subset you need to get running. The backend ships a
+              config schema, so a key it does not declare is a startup error rather than a
+              setting that quietly does nothing — which makes the full list worth having:
+              <a
+                href="https://github.com/yorch/colophon/blob/main/docs/reference/configuration.md"
+                >the configuration reference</a
+              >
+              documents every key, with defaults, and covers <code>appPath</code>,
+              <code>storage.s3.prefix</code>, S3-compatible endpoints and permissions.
             </p>
           </section>
 
@@ -442,7 +473,7 @@ nav:                      <span class="cm"># when present, wins over the directo
               <figcaption>shell</figcaption>
               <pre><code>corepack enable
 yarn install
-yarn verify        <span class="cm"># lint + arch lint + typecheck + test</span></code></pre>
+yarn verify        <span class="cm"># lint + arch lint + site lint + typecheck + test</span></code></pre>
             </figure>
 
             <p>
@@ -483,6 +514,7 @@ yarn verify        <span class="cm"># lint + arch lint + typecheck + test</span>
           <a href="architecture.html">Architecture</a> ·
           <a href="implementation.html">Implementation</a> ·
           <a href="agents.html">For agents</a> ·
+          <a href="https://github.com/yorch/colophon/tree/main/docs">Reference docs</a> ·
           <a href="https://github.com/yorch/colophon">GitHub</a>
         </p>
       </div>

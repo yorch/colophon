@@ -14,6 +14,12 @@
  * de-duplicating them would mean adopting the build step the site was designed
  * to avoid. So the duplication stays and this checks it instead.
  *
+ * `SITE-BUILD-OPTIONS.md` at the repository root is the long version of that
+ * decision — every generator and templating option that was measured and why
+ * each was rejected. It lived under `site/` until it was noticed that GitHub
+ * Pages was serving an internal memo to the public, since the workflow uploads
+ * that directory verbatim.
+ *
  * Note what a naive version of this check would get wrong, because both of
  * these are load-bearing:
  *

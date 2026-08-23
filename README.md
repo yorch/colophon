@@ -18,6 +18,12 @@ exposed as MCP tools for agents.
 
 This README is the short version — the site above covers each topic properly.
 
+The site explains the system; it does not enumerate it. Every CLI command and
+every app-config key is in **[`docs/`](docs/)** — [CLI reference](docs/reference/cli.md)
+and [configuration reference](docs/reference/configuration.md). That tree is
+published as a Colophon bundle and link-checked in CI, which is why it is the
+copy to trust when the two disagree.
+
 ## Status
 
 Early development, but published: `0.1.1` is on npm under the `next` dist-tag.
@@ -126,7 +132,7 @@ const app = createApp({ features: [colophonPlugin] });
 
 **Config** — merge [`app-config.colophon.yaml`](app-config.colophon.yaml) into
 your `app-config.yaml`. Every key is documented in
-[configuration](https://yorch.github.io/colophon/getting-started.html).
+[the configuration reference](docs/reference/configuration.md).
 
 **Publishing from CI** — the CLI needs no installation:
 
@@ -171,7 +177,7 @@ a decommissioned repository outright, and `colophon gc` reclaims the storage
 neither of them touches — reporting what it would delete and doing nothing
 until `--confirm`. Blobs are content-addressed into one namespace shared by
 every bundle, so `gc` computes reachability across the whole corpus rather
-than per bundle. See `docs/reference/cli.md`.
+than per bundle. See [the CLI reference](docs/reference/cli.md).
 
 Link an entity to a bundle with an annotation:
 
@@ -183,8 +189,9 @@ metadata:
     # brnby.io/colophon: github.com/org/platform#services/billing
 ```
 
-See `app-config.colophon.yaml` for backend configuration, and
-`docs/reference/configuration.md` for every key.
+See [`app-config.colophon.yaml`](app-config.colophon.yaml) for backend
+configuration, and [the configuration reference](docs/reference/configuration.md)
+for every key.
 
 ## For agents
 
