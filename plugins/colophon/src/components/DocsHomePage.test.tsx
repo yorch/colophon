@@ -1,9 +1,13 @@
-import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
+import {
+  renderInTestApp,
+  TestApiProvider,
+} from '@backstage/frontend-test-utils';
 import '@testing-library/jest-dom';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BundleSummary, ColophonApi } from '../api';
 import { colophonApiRef } from '../api';
+import { colophonRouteRef } from '../plugin';
 import { DocsHomePage } from './DocsHomePage';
 
 function bundle(overrides: Partial<BundleSummary> = {}): BundleSummary {
@@ -29,12 +33,24 @@ function apiStub(overrides: Partial<ColophonApi> = {}): ColophonApi {
   };
 }
 
-async function renderAt(api: ColophonApi, path: string) {
+/**
+ * @param mountPath - where the page extension is mounted, which an app
+ *   configures. Passing something other than the default is the whole point
+ *   of the tests below that do.
+ */
+async function renderAt(
+  api: ColophonApi,
+  path: string,
+  mountPath = '/colophon',
+) {
   return renderInTestApp(
     <TestApiProvider apis={[[colophonApiRef, api]]}>
       <DocsHomePage />
     </TestApiProvider>,
-    { routeEntries: [path] },
+    {
+      initialRouteEntries: [path],
+      mountedRoutes: { [mountPath]: colophonRouteRef },
+    },
   );
 }
 
@@ -97,6 +113,23 @@ describe('DocsHomePage browse list', () => {
       ).toHaveAttribute('href', '/colophon/github.com/brnby/api'),
     );
   });
+
+  // `/colophon` is a default, not a fact: PageBlueprint takes `path` from
+  // config, and these links used to spell it out, so an app that moved the
+  // page got a list where every row 404'd. Asserting the href only proves the
+  // attribute — that clicking it lands anywhere has to be seen in a browser,
+  // since jsdom has no router of its own.
+  it('builds bundle links from the configured page path', async () => {
+    const api = apiStub({
+      listBundles: jest.fn().mockResolvedValue([bundle()]),
+    });
+    await renderAt(api, '/', '/handbook');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('link', { name: 'Payments API' }),
+      ).toHaveAttribute('href', '/handbook/github.com/brnby/api'),
+    );
+  });
 });
 
 describe('DocsHomePage bundle route', () => {
@@ -118,6 +151,16 @@ describe('DocsHomePage bundle route', () => {
     await renderAt(api, '/github.com/brnby/api?channel=1.x');
     await waitFor(() =>
       expect(getManifest).toHaveBeenCalledWith('github.com/brnby/api', '1.x'),
+    );
+  });
+
+  it('points the way back at the configured page path', async () => {
+    const api = apiStub();
+    await renderAt(api, '/github.com/brnby/api', '/handbook');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('link', { name: '← All documentation' }),
+      ).toHaveAttribute('href', '/handbook'),
     );
   });
 });
