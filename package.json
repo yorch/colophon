@@ -32,7 +32,7 @@
     "verify": "yarn lint && yarn lint:arch && yarn lint:site && yarn tsc && yarn test",
     "changeset": "changeset",
     "version-packages": "changeset version && yarn install --no-immutable",
-    "release": "yarn tsc && yarn build && node scripts/check-packables.mjs && changeset publish --tag next"
+    "release": "yarn tsc && yarn build && node scripts/check-packables.mjs && changeset publish"
   },
   "devDependencies": {
     "@backstage/cli": "^0.36.4",

@@ -106,20 +106,45 @@ reports `◇ Successfully published:` from a progress UI. Five packages went out
 and the output still read `false`. Nothing in the workflow reads another tool's
 console output any more.
 
-Releases currently go out under the `next` dist-tag, so `npm install
-@brnby/plugin-colophon` resolves to nothing while the bundle contract is still
-moving. To promote a version once you are ready to stand behind it:
+### Why the release job checks the dist-tags afterwards
+
+Releases go out under `latest`, which is what `changeset publish` does with no
+`--tag`. They did not for the first four: the `release` script carried
+`--tag next`, left over from the `0.0.0` recovery below, where publishing to
+`next` was right because `latest` was pointing at something broken. `latest`
+was moved by hand that once and the flag stayed. So 0.1.0, 0.1.1 and 0.2.0 all
+went to `next`, `latest` stayed on 0.1.0, and `npm install
+@brnby/plugin-colophon` installed a version four releases old — through four
+green runs that published the right versions, tagged them and wrote a GitHub
+release each time. Nothing in the pipeline had an opinion about where `latest`
+pointed, which is the part that let it run that long.
+
+The **Check dist-tags** step is that opinion. After the release, for every
+package in the fixed group, it asks the registry what `latest` resolves to and
+fails the run when that is not the version in the manifests, naming each
+package, both versions and the `npm dist-tag add` needed to repair it. It
+polls rather than asking once, because a dist-tag is not visible the instant
+the publish that moved it returns.
+
+It is deliberately not gated on this run having published. A version the
+registry has never seen is skipped — that is a push to main whose version is
+not released yet, not a failure — so the check is cheap enough to run on every
+push, and running it on every push is what turns a dist-tag that has silently
+stopped moving into a failure on the next push rather than four releases
+later. The exception is a version this run released: then the registry has to
+have it, and its absence is the failure.
+
+Moving `latest` back onto a version already published is a maintainer's job,
+not CI's — `npm dist-tag` needs a credential this repository deliberately does
+not hold:
 
 ```bash
-npm dist-tag add @brnby/colophon-common@0.1.0 latest
-npm dist-tag add @brnby/colophon-cli@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon-react@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon-backend@0.1.0 latest
+npm dist-tag add @brnby/colophon-common@0.2.0 latest
+npm dist-tag add @brnby/colophon-cli@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon-react@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon-backend@0.2.0 latest
 ```
-
-To publish to `latest` from then on, drop `--tag next` from the `release`
-script in the root `package.json`.
 
 ### Why the release job rebuilds and re-verifies
 
