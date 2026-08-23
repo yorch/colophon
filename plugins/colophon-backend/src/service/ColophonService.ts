@@ -1,5 +1,5 @@
 import type { LoggerService } from '@backstage/backend-plugin-api';
-import { InputError, NotFoundError } from '@backstage/errors';
+import { ConflictError, InputError, NotFoundError } from '@backstage/errors';
 import {
   blobKey,
   DEFAULT_CHANNEL,
@@ -200,6 +200,109 @@ export class ColophonService {
   }
 
   /**
+   * Retires a channel.
+   *
+   * The order is forced by what pins what: a channel pins a revision and a
+   * revision pins its blobs, so the pointer has to go first and only then can
+   * anything downstream be reconsidered. Retention does the reconsidering,
+   * which is what keeps a revision that a SECOND channel still points at from
+   * being collected along with the first.
+   *
+   * Blobs are not touched here at all. They are content-addressed and shared
+   * globally — the identical page in two repositories is one object — so
+   * whether one is now unreachable is not a question this bundle can answer.
+   * `colophon gc` answers it across the whole corpus.
+   */
+  async deleteChannel(
+    bundleId: string,
+    channel: string,
+  ): Promise<{ revisionsCollected: string[] }> {
+    // Resolves first, so an unknown bundle or channel is a 404 rather than a
+    // successful delete of nothing.
+    const target = await this.#db.resolveChannel(bundleId, channel);
+    const fallback = await this.#defaultChannel(bundleId);
+
+    // Removing the channel a bare docs URL resolves to would leave the bundle
+    // present in every listing and resolvable by nothing — a shape the portal
+    // has no way to render and an operator has no obvious way to repair.
+    // Retiring the whole bundle is the supported way to remove everything.
+    if (fallback && fallback.channel === target.channel) {
+      throw new ConflictError(
+        `Channel "${channel}" is the default channel of "${bundleId}"; ` +
+          `point the default at another revision first, or delete the bundle`,
+      );
+    }
+
+    if (!(await this.#db.deleteChannel(bundleId, channel))) {
+      throw new NotFoundError(
+        `Bundle "${bundleId}" has no channel "${channel}"`,
+      );
+    }
+
+    // Same reasoning as on the publish path: the deletion has landed, so a
+    // failing retention pass must not report it as failed. The orphaned
+    // revisions are collected by the next publish or the next deletion.
+    try {
+      return { revisionsCollected: await this.collectGarbage(bundleId) };
+    } catch (error) {
+      this.#logger.warn(
+        `Retention pass failed after deleting ${bundleId}@${channel}; orphaned revisions will be collected later`,
+        error as Error,
+      );
+      return { revisionsCollected: [] };
+    }
+  }
+
+  /**
+   * Retires a bundle outright — every channel, every revision, and the page
+   * and chunk rows they carry.
+   *
+   * Channels are dropped before revisions because `colophon_channels` carries
+   * a foreign key to `colophon_revisions` with no ON DELETE, so deleting a
+   * revision a channel still points at fails outright on Postgres. The two
+   * steps are separate transactions rather than one, which is safe in the
+   * only direction it can fail: a crash between them leaves revisions that no
+   * channel points at, which is precisely what retention already collects.
+   * The reverse order has no such recovery.
+   */
+  async deleteBundle(
+    bundleId: string,
+  ): Promise<{ channelsDeleted: number; revisionsDeleted: number }> {
+    const revisions = await this.#db.listRevisions(bundleId);
+    const channels = await this.#db.listChannels(bundleId);
+    if (revisions.length === 0 && channels.length === 0) {
+      throw new NotFoundError(`Unknown bundle "${bundleId}"`);
+    }
+
+    const channelsDeleted = await this.#db.deleteChannels(bundleId);
+    await this.#db.deleteRevisions(revisions.map(r => r.revisionId));
+    this.#logger.info(
+      `Deleted bundle ${bundleId}: ${channelsDeleted} channels, ${revisions.length} revisions`,
+    );
+    return { channelsDeleted, revisionsDeleted: revisions.length };
+  }
+
+  /**
+   * The channel a bare docs URL resolves to, or undefined when the bundle has
+   * none.
+   *
+   * Asks `resolveChannel` rather than re-deriving the fallback rule, because
+   * the rule this guards is exactly "what an unqualified read resolves to" —
+   * a second copy of it would eventually disagree and let the wrong channel
+   * be deleted.
+   */
+  async #defaultChannel(bundleId: string): Promise<ChannelRecord | undefined> {
+    try {
+      return await this.#db.resolveChannel(bundleId);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Reads every page of a revision, chunks it, and stores the result.
    *
    * Idempotent twice over: a revision that already carries `indexed_at` is
@@ -271,9 +374,10 @@ export class ColophonService {
 
   /**
    * Drops revision index rows no channel points at, beyond the retention
-   * window. Blobs are left alone on purpose: they are content-addressed and
-   * shared between revisions, so deleting them is a bucket lifecycle
-   * decision, not this plugin's.
+   * window. Blobs are left alone on purpose: they are content-addressed in
+   * ONE namespace shared by every bundle, so whether an object is still
+   * needed cannot be answered from inside a single bundle. `colophon gc`
+   * answers it corpus-wide, using this table as its definition of reachable.
    */
   async collectGarbage(bundleId: string): Promise<string[]> {
     const stale = await this.#db.collectUnreferencedRevisions(

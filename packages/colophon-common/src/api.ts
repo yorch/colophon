@@ -108,5 +108,48 @@ export interface ListBundlesFilters {
   q?: string;
 }
 
+/**
+ * What a deletion actually removed.
+ *
+ * Reported rather than answered with an empty 204, because the interesting
+ * part of retiring a channel is the revisions that retiring it orphaned. An
+ * operator who cannot see that number has no way to tell "removed a stale
+ * pointer" from "unpinned the last copy of the docs".
+ */
+export interface DeleteChannelResponse {
+  bundleId: string;
+  channel: string;
+  /** Revisions the deletion orphaned and retention then collected. */
+  revisionsCollected: string[];
+}
+
+export interface DeleteBundleResponse {
+  bundleId: string;
+  channelsDeleted: number;
+  revisionsDeleted: number;
+}
+
+/** One revision the backend still keeps — the unit of reachability for gc. */
+export interface RetainedRevision {
+  bundleId: string;
+  revisionId: string;
+}
+
+/**
+ * Every revision the backend has not collected, paginated.
+ *
+ * The garbage collector's input. It cannot be derived from the bundle list:
+ * that reports only the revisions a channel points at, while retention
+ * deliberately keeps a window of unpointed ones so a rollback has something
+ * to roll back to. A sweep that read the bundle list instead would delete the
+ * blobs of exactly the revisions retention exists to preserve.
+ */
+export interface ListRetainedRevisionsResponse {
+  revisions: RetainedRevision[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 /** Re-exported so a client needs only this module to type a response. */
 export type { DocStatus, DocType };

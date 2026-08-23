@@ -150,7 +150,7 @@ const UPLOAD_CONCURRENCY = 12;
  * Hand-rolled rather than adding a dependency: the whole implementation is
  * a handful of lines, and the CLI is deliberately thin.
  */
-async function forEachConcurrent<T>(
+export async function forEachConcurrent<T>(
   items: T[],
   limit: number,
   worker: (item: T) => Promise<void>,
