@@ -1,17 +1,19 @@
 import { useApi } from '@backstage/core-plugin-api';
+import { useRouteRef } from '@backstage/frontend-plugin-api';
 import { Box, Flex, Link, SearchField, Text } from '@backstage/ui';
 import { useColophonStyles } from '@brnby/plugin-colophon-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { BundleSummary } from '../api';
 import { colophonApiRef } from '../api';
+import { colophonRouteRef } from '../plugin';
 import { DocsBrowser } from './DocsBrowser';
 import { StateMessage } from './StateMessage';
 
 /**
  * The docs home page: browse every published bundle, or read one.
  *
- * Routed as `/colophon/*` because a bundle id is itself slash-separated
+ * Routed as `<page path>/*` because a bundle id is itself slash-separated
  * (`github.com/org/repo`) — there is no fixed number of path segments to
  * declare ahead of it, so the whole remainder becomes the bundle id and the
  * channel travels as a query param instead of a positional segment, which
@@ -26,10 +28,28 @@ export function DocsHomePage() {
   );
 }
 
+/**
+ * Where this page is mounted, which the adopter chooses.
+ *
+ * PageBlueprint takes `path` from config, so an app is free to mount the docs
+ * home at `/handbook`. The links below used to spell `/colophon` out, and
+ * every one of them 404'd for such an app — the page rendered fine, so
+ * nothing failed until something was clicked. The route ref is the only thing
+ * that knows the configured path.
+ *
+ * `useRouteRef` returns undefined when the ref is bound to no route at all,
+ * which for the page that owns the ref means it is not mounted in an app —
+ * a bare unit test, not a deployment.
+ */
+function useDocsPath(): string {
+  return useRouteRef(colophonRouteRef)?.() ?? '';
+}
+
 /** Browses every published bundle. */
 function BundleList() {
   useColophonStyles();
   const api = useApi(colophonApiRef);
+  const docsPath = useDocsPath();
   const [bundles, setBundles] = useState<BundleSummary[]>();
   const [error, setError] = useState<Error>();
   const [filter, setFilter] = useState('');
@@ -97,7 +117,7 @@ function BundleList() {
                   making every word in it part of the link's name. */}
               <a
                 className="colophon-bundle-row-link"
-                href={`/colophon/${bundle.bundleId}`}
+                href={`${docsPath}/${bundle.bundleId}`}
               >
                 {bundle.title}
               </a>
@@ -132,10 +152,11 @@ function BundleRoute() {
   const bundleId = params['*'] ?? '';
   const [searchParams, setSearchParams] = useSearchParams();
   const channel = searchParams.get('channel') ?? undefined;
+  const docsPath = useDocsPath();
 
   return (
     <Box>
-      <Link href="/colophon">← All documentation</Link>
+      <Link href={docsPath}>← All documentation</Link>
       <Box style={{ marginTop: '1rem' }}>
         <DocsBrowser
           bundleId={bundleId}
