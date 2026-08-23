@@ -92,11 +92,26 @@ re-check the input names, because GitHub Actions **ignores unknown inputs
 silently** — every input was renamed between v1 and v2.
 
 That step works out what to release from the repository, not from the
-changesets action: the version comes from the manifests, the list of packages
-from the `fixed` group in `.changeset/config.json`, and whether the release has
-already been made from whether the tag exists. So a push to main that does not
-bump the version is a no-op, and re-running a release that already tagged is
-safe.
+changesets action: the version comes from the manifests **on the commit being
+released**, the list of packages from the `fixed` group in
+`.changeset/config.json`, and whether the release has already been made from
+whether the tag exists. So a push to main that does not bump the version is a
+no-op, and re-running a release that already tagged is safe.
+
+"On the commit" is load-bearing, and reading the working tree instead is how
+`v0.1.2` came to exist as a tag and a GitHub release with nothing behind it on
+npm. `changesets/action` runs the version script — `changeset version` — in
+this checkout to build the "chore: version packages" pull request, and the
+bumped manifests stay there. A step that reads them off disk on a push that
+merely *opens* that pull request sees a version nothing has published, does
+not find its tag, and releases it. That is exactly what happened on the
+feature merge that opened the 0.1.2 pull request; the pull request later
+absorbed a minor changeset and merged as 0.2.0, so 0.1.2 will never exist. The
+same slip put `v0.2.0`'s tag on a feature merge rather than on the commit that
+published it. The versions are now read with `git show "$GITHUB_SHA:…"`, from
+the same commit the tag is pinned to. The `v0.1.2` and `v0.2.0` refs are
+left as they are — repairing a published tag is a history rewrite, and the
+record of what went wrong is worth more than a tidy tag list.
 
 It used to be gated on the action's `published` output instead, and that is how
 0.1.1 reached npm with no tag and no release, in a run that reported success.
@@ -106,20 +121,49 @@ reports `◇ Successfully published:` from a progress UI. Five packages went out
 and the output still read `false`. Nothing in the workflow reads another tool's
 console output any more.
 
-Releases currently go out under the `next` dist-tag, so `npm install
-@brnby/plugin-colophon` resolves to nothing while the bundle contract is still
-moving. To promote a version once you are ready to stand behind it:
+### Why the release job checks the dist-tags afterwards
+
+Releases go out under `latest`, which is what `changeset publish` does with no
+`--tag`. They did not for the first four: the `release` script carried
+`--tag next`, left over from the `0.0.0` recovery below, where publishing to
+`next` was right because `latest` was pointing at something broken. `latest`
+was moved by hand that once and the flag stayed. So 0.1.0, 0.1.1 and 0.2.0 all
+went to `next`, `latest` stayed on 0.1.0, and `npm install
+@brnby/plugin-colophon` installed a version four releases old — through four
+green runs that published the right versions, tagged them and wrote a GitHub
+release each time. Nothing in the pipeline had an opinion about where `latest`
+pointed, which is the part that let it run that long.
+
+The **Check dist-tags** step is that opinion. After the release, for every
+package in the fixed group, it asks the registry what `latest` resolves to and
+fails the run when that is not the version just released, naming each package,
+both versions and the `npm dist-tag add` needed to repair it. It polls rather
+than asking once, because a dist-tag is not visible the instant the publish
+that moved it returns.
+
+It runs only when the step above created the release, which — now that the
+version is read from the commit — is the same question as whether this run
+published: a push that releases nothing finds its tag already there and skips
+both steps. Asking the registry on every push would also catch a dist-tag
+moved out of band, but it would hold main red for a stale `latest` that only a
+maintainer with npm 2FA can repair, and a main that stays red for something
+the run did not do teaches people to ignore red.
+
+It also catches a release with no publish behind it, because a version that
+never reached the registry cannot be what `latest` resolves to. That is the
+second line behind the manifest fix above, not a replacement for it.
+
+Moving `latest` back onto a version already published is a maintainer's job,
+not CI's — `npm dist-tag` needs a credential this repository deliberately does
+not hold:
 
 ```bash
-npm dist-tag add @brnby/colophon-common@0.1.0 latest
-npm dist-tag add @brnby/colophon-cli@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon-react@0.1.0 latest
-npm dist-tag add @brnby/plugin-colophon-backend@0.1.0 latest
+npm dist-tag add @brnby/colophon-common@0.2.0 latest
+npm dist-tag add @brnby/colophon-cli@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon-react@0.2.0 latest
+npm dist-tag add @brnby/plugin-colophon-backend@0.2.0 latest
 ```
-
-To publish to `latest` from then on, drop `--tag next` from the `release`
-script in the root `package.json`.
 
 ### Why the release job rebuilds and re-verifies
 
