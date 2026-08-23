@@ -86,7 +86,7 @@ export async function planGc(options: {
 }): Promise<GcPlan> {
   const { storage } = options;
   const minAgeMs = options.minAgeMs ?? DEFAULT_MIN_AGE_MS;
-  const cutoff = (options.now?.getTime() ?? Date.now()) - minAgeMs;
+  const now = options.now?.getTime() ?? Date.now();
 
   const candidates = await storage.list(`${BLOB_PREFIX}/`);
   const retained = await options.retained();
@@ -124,9 +124,36 @@ export async function planGc(options: {
   let skippedRecent = 0;
   const tooYoung = (object: StoredObject) => {
     // An object of unknown age is treated as young. Being wrong in that
-    // direction costs a sweep; being wrong the other way costs content.
-    const modified = object.lastModified?.getTime() ?? Infinity;
-    if (modified > cutoff) {
+    // direction costs a sweep; being wrong the other way costs content. It is
+    // counted, not silently skipped, so a backend that reports no timestamps
+    // shows up as "too recent: everything" rather than as a sweep that
+    // quietly stops collecting.
+    if (!object.lastModified) {
+      skippedRecent += 1;
+      return true;
+    }
+
+    // Age is clamped at zero because a freshly written object can report a
+    // timestamp in the FUTURE. `new Date(mtimeMs)` rounds, and filesystem
+    // timestamps carry sub-millisecond precision, so an object written at
+    // x.6ms reports x+1 while a Date.now() taken immediately afterwards
+    // still reads x. Measured here: that happens on roughly half of all
+    // writes.
+    //
+    // Comparing the raw timestamp against a cutoff made that 1ms of rounding
+    // decide the answer, which broke the boundary the flag is named after:
+    // `--min-age-hours 0` means "collect regardless of age", and it was
+    // instead holding back anything written in the current millisecond and
+    // reporting it as too recent. Subtracting and clamping makes the
+    // degenerate case exact — no age is ever less than zero — so the flag
+    // means what it says and no sweep depends on sub-millisecond timing.
+    //
+    // The clamp is not only about rounding. An S3 listing's timestamps come
+    // from AWS's clock rather than this host's, so a host running slightly
+    // behind sees future-dated objects for real and by more than a
+    // millisecond.
+    const age = Math.max(0, now - object.lastModified.getTime());
+    if (age < minAgeMs) {
       skippedRecent += 1;
       return true;
     }

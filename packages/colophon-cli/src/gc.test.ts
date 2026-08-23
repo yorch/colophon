@@ -9,7 +9,11 @@ import {
   type RetainedRevision,
 } from '@brnby/colophon-common';
 import { executeGc, type GcPlan, planGc } from './gc';
-import { type BundleStorage, LocalBundleStorage } from './storage';
+import {
+  type BundleStorage,
+  LocalBundleStorage,
+  type StoredObject,
+} from './storage';
 
 /** Fixtures live under the repo's tmp/, never the system temp directory. */
 const TMP_ROOT = join(__dirname, '../../../tmp');
@@ -90,8 +94,8 @@ describe('gc', () => {
     };
   }
 
-  const sweep = (retained: RetainedRevision[], minAgeMs = 0) =>
-    planGc({ storage, retained: async () => retained, minAgeMs });
+  const sweep = (retained: RetainedRevision[], minAgeMs = 0, now?: Date) =>
+    planGc({ storage, retained: async () => retained, minAgeMs, now });
 
   const run = async (retained: RetainedRevision[]): Promise<GcPlan> => {
     const plan = await sweep(retained);
@@ -219,11 +223,94 @@ describe('gc', () => {
       bodies: ['# Alpha\n\nJust uploaded, not yet registered.\n'],
     });
 
-    const plan = await sweep([], 60_000);
+    // The clock is injected rather than read, so the assertion is about the
+    // age rule and not about how long the lines above happened to take.
+    const plan = await sweep([], 60_000, new Date());
 
     expect(plan.unreferencedBlobs).toEqual([]);
     expect(plan.staleManifests).toEqual([]);
     expect(plan.skippedRecent).toBe(2);
+  });
+
+  describe('the age boundary', () => {
+    /**
+     * A store whose objects carry exactly the timestamp asked for.
+     *
+     * A real filesystem cannot be made to report a chosen skew, and the bug
+     * this pins lived entirely in a one-millisecond difference — so the age
+     * has to be an input rather than something the test races to observe.
+     */
+    const stubbed = (lastModified?: Date): BundleStorage => {
+      const objects: StoredObject[] = [
+        { key: blobKey(sha256('body')), size: 10, lastModified },
+        {
+          key: manifestKey('github.com/org/alpha', revisionOf('alpha')),
+          size: 20,
+          lastModified,
+        },
+      ];
+      return {
+        has: async () => true,
+        put: async () => {},
+        get: async () => Buffer.from('{}', 'utf8'),
+        list: async prefix =>
+          objects.filter(object => object.key.startsWith(prefix)),
+        delete: async () => {},
+      };
+    };
+
+    const at = (now: Date, minAgeMs: number, lastModified?: Date) =>
+      planGc({
+        storage: stubbed(lastModified),
+        retained: async () => [],
+        minAgeMs,
+        now,
+      });
+
+    it('collects an object stamped in the future when no minimum age is set', async () => {
+      // Not hypothetical: `new Date(mtimeMs)` ROUNDS, and filesystem
+      // timestamps carry sub-millisecond precision, so an object written at
+      // x.6ms reports x+1 while a Date.now() taken straight afterwards still
+      // reads x. It happens on roughly half of all writes, and it used to
+      // make `--min-age-hours 0` hold objects back and report them as too
+      // recent — the opposite of what the flag says.
+      const now = new Date();
+      const plan = await at(now, 0, new Date(now.getTime() + 1));
+
+      expect(plan.unreferencedBlobs).toHaveLength(1);
+      expect(plan.staleManifests).toHaveLength(1);
+      expect(plan.skippedRecent).toBe(0);
+    });
+
+    it('still holds a future-stamped object back when a minimum age is set', async () => {
+      // Clamping the age at zero must not weaken the guard: an object that
+      // appears to be from the future is as new as anything can be.
+      const now = new Date();
+      const plan = await at(now, 60_000, new Date(now.getTime() + 1));
+
+      expect(plan.unreferencedBlobs).toEqual([]);
+      expect(plan.staleManifests).toEqual([]);
+      expect(plan.skippedRecent).toBe(2);
+    });
+
+    it('collects an object exactly at the minimum age', async () => {
+      const now = new Date();
+      const plan = await at(now, 60_000, new Date(now.getTime() - 60_000));
+
+      expect(plan.unreferencedBlobs).toHaveLength(1);
+      expect(plan.staleManifests).toHaveLength(1);
+    });
+
+    it('holds back an object of unknown age, and says so', async () => {
+      // Reported through skippedRecent rather than silently kept, so a
+      // backend that returns no timestamps looks like a sweep that is holding
+      // everything back rather than one that has quietly stopped working.
+      const plan = await at(new Date(), 0, undefined);
+
+      expect(plan.unreferencedBlobs).toEqual([]);
+      expect(plan.staleManifests).toEqual([]);
+      expect(plan.skippedRecent).toBe(2);
+    });
   });
 
   it('leaves objects it does not recognise alone', async () => {
