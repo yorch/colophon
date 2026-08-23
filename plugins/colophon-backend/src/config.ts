@@ -1,4 +1,8 @@
-import type { RootConfigService } from '@backstage/backend-plugin-api';
+import {
+  type RootConfigService,
+  readSchedulerServiceTaskScheduleDefinitionFromConfig,
+  type SchedulerServiceTaskScheduleDefinition,
+} from '@backstage/backend-plugin-api';
 import type { Config } from '@backstage/config';
 import {
   type ChunkingOptions,
@@ -26,7 +30,7 @@ export interface ColophonConfig {
    * be frequent, because until it runs a newly annotated entity has no
    * documentation tab.
    */
-  entityLinkSchedule: TaskSchedule;
+  entityLinkSchedule: SchedulerServiceTaskScheduleDefinition;
   /**
    * How often documentation is projected into Backstage Search.
    *
@@ -38,26 +42,22 @@ export interface ColophonConfig {
    * thing — ingestion — which is synchronous inside setChannel and not
    * scheduled at all.
    */
-  searchIndexSchedule: TaskSchedule;
+  searchIndexSchedule: SchedulerServiceTaskScheduleDefinition;
 }
 
-export interface TaskSchedule {
-  frequency: { minutes: number };
-  timeout: { minutes: number };
-  initialDelay: { seconds: number };
-}
+export const DEFAULT_ENTITY_LINK_SCHEDULE: SchedulerServiceTaskScheduleDefinition =
+  {
+    frequency: { minutes: 10 },
+    timeout: { minutes: 5 },
+    initialDelay: { seconds: 15 },
+  };
 
-export const DEFAULT_ENTITY_LINK_SCHEDULE: TaskSchedule = {
-  frequency: { minutes: 10 },
-  timeout: { minutes: 5 },
-  initialDelay: { seconds: 15 },
-};
-
-export const DEFAULT_SEARCH_INDEX_SCHEDULE: TaskSchedule = {
-  frequency: { minutes: 60 },
-  timeout: { minutes: 30 },
-  initialDelay: { seconds: 60 },
-};
+export const DEFAULT_SEARCH_INDEX_SCHEDULE: SchedulerServiceTaskScheduleDefinition =
+  {
+    frequency: { minutes: 60 },
+    timeout: { minutes: 30 },
+    initialDelay: { seconds: 60 },
+  };
 
 export const DEFAULT_REVISIONS_PER_CHANNEL = 10;
 
@@ -90,25 +90,24 @@ export function readColophonConfig(config: RootConfigService): ColophonConfig {
   };
 }
 
+/**
+ * Delegates to the platform reader rather than picking the units apart here.
+ *
+ * The hand-rolled version this replaces read `frequency.minutes` and nothing
+ * else, so `frequency: { seconds: 30 }` — valid everywhere else in Backstage
+ * — was dropped and the default silently applied instead. Anything the
+ * platform accepts now works: `seconds`, `minutes`, `hours`, `days`, an ISO
+ * duration string, or a cron expression.
+ *
+ * A declared block must carry both `frequency` and `timeout`, which is where
+ * the platform reader throws. That is deliberate: half a schedule is a
+ * mistake, and completing it from the defaults is how the original bug hid.
+ */
 function readSchedule(
   config: Config | undefined,
-  fallback: TaskSchedule,
-): TaskSchedule {
-  return {
-    frequency: {
-      minutes:
-        config?.getOptionalNumber('frequency.minutes') ??
-        fallback.frequency.minutes,
-    },
-    timeout: {
-      minutes:
-        config?.getOptionalNumber('timeout.minutes') ??
-        fallback.timeout.minutes,
-    },
-    initialDelay: {
-      seconds:
-        config?.getOptionalNumber('initialDelay.seconds') ??
-        fallback.initialDelay.seconds,
-    },
-  };
+  fallback: SchedulerServiceTaskScheduleDefinition,
+): SchedulerServiceTaskScheduleDefinition {
+  return config
+    ? readSchedulerServiceTaskScheduleDefinitionFromConfig(config)
+    : fallback;
 }

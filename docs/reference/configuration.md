@@ -7,7 +7,9 @@ tags: [configuration, reference]
 
 # Configuration
 
-All keys live under `colophon` in `app-config.yaml`.
+All keys live under `colophon` in `app-config.yaml`. The backend ships a
+config schema, so a key that is not on this page is a validation error
+rather than a setting that quietly does nothing.
 
 ## Storage
 
@@ -21,16 +23,65 @@ colophon:
     s3:
       bucket: my-colophon-bucket
       region: eu-west-1
+      prefix: colophon/
     local:
       directory: ./colophon-data
 ```
 
 | Key | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `storage.type` | yes | — | `s3` or `local` |
-| `storage.s3.bucket` | when `s3` | — | |
-| `storage.s3.region` | when `s3` | AWS SDK default | |
-| `storage.local.directory` | when `local` | — | Development only |
+| `storage.type` | no | `local` | `s3` or `local` |
+| `storage.s3.bucket` | when `s3` | — | Startup fails without it |
+| `storage.s3.region` | no | AWS SDK default | |
+| `storage.s3.prefix` | no | — | Key prefix, so one bucket can hold more than Colophon |
+| `storage.s3.endpoint` | no | AWS S3 | See below |
+| `storage.s3.forcePathStyle` | no | `false` | See below |
+| `storage.s3.credentials.accessKeyId` | no | AWS SDK provider chain | Marked secret |
+| `storage.s3.credentials.secretAccessKey` | no | AWS SDK provider chain | Marked secret |
+| `storage.local.directory` | no | `./colophon-storage` | Resolved against the backend's working directory. Development only |
+
+### Credentials
+
+Leave `credentials` unset and the AWS SDK's default provider chain applies —
+environment, shared config file, instance role, IRSA. That is the right answer
+for a deployment on AWS: no long-lived key material in `app-config.yaml` at
+all. Both keys are declared `visibility: secret`, so if you do set them they
+are redacted from logs and from `backstage-cli config:print`, and can never
+reach the frontend.
+
+### Anything S3-compatible, not only AWS
+
+`endpoint` and `forcePathStyle` are passed straight to the AWS SDK client, so
+**MinIO, Ceph RADOS Gateway, Cloudflare R2 and Google Cloud Storage** all work
+as bundle storage. Most non-AWS endpoints need path-style addressing:
+
+```yaml
+colophon:
+  storage:
+    type: s3
+    s3:
+      bucket: colophon
+      endpoint: http://minio.internal:9000
+      forcePathStyle: true
+      region: us-east-1
+```
+
+R2 wants its account endpoint and `region: auto`; GCS wants
+`https://storage.googleapis.com` with its HMAC keys as the credentials.
+
+### Do not put an age-based lifecycle rule on `blobs/`
+
+Bundles are stored under two prefixes with different lifetimes:
+`bundles/<bundleId>/revisions/<revisionId>/manifest.json` and
+`blobs/<ab>/<sha256>`. Blobs are content-addressed and deduplicated — publish
+skips the upload entirely when the key already exists — so an unchanged page's
+object keeps the timestamp of the first revision that ever contained it, no
+matter how many current revisions reference it. A rule such as "delete objects
+older than 90 days" applied to `blobs/` therefore deletes live content while
+every manifest still points at it, and nothing notices until a reader asks for
+that page. Scope lifecycle rules to `bundles/` if you want them at all, and
+reclaim blob storage through `retention.revisionsPerChannel` and garbage
+collection instead.
 
 ## Retention
 
@@ -55,13 +106,15 @@ colophon:
     splitDepths: [2, 3]
     maxChars: 1500
     minChars: 200
+    overlapChars: 0
 ```
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `chunking.splitDepths` | `[2, 3]` | Heading depths that start a chunk |
+| `chunking.splitDepths` | `[2, 3]` | Heading depths (1-6) that start a chunk |
 | `chunking.maxChars` | `1500` | Soft ceiling; long sections split on paragraphs |
 | `chunking.minChars` | `200` | Shorter sections merge into the next sibling |
+| `chunking.overlapChars` | `0` | Characters of the preceding chunk repeated for continuity |
 
 ## Schedules
 
@@ -85,6 +138,16 @@ colophon:
 | --- | --- | --- |
 | `entityLinks` | One filtered catalog query and a small table rewrite | Run often — until it runs, a newly annotated entity has no documentation tab |
 | `searchIndex` | Pages the entire corpus over HTTP | Run rarely |
+
+Both entries take the platform's standard schedule shape, so `seconds`,
+`minutes`, `hours` and `days` all work, as do an ISO 8601 duration string
+(`PT30S`) and `frequency: { cron: '*/5 * * * *' }`. `scope` is accepted too.
+
+`frequency` and `timeout` are required once you name a task at all —
+`initialDelay` and `scope` are optional. A block missing one of the two is a
+startup error rather than a silent completion from the defaults, which is how
+a `frequency: { seconds: 30 }` that only `minutes` was ever read from went
+unnoticed at ten minutes.
 
 Note that neither of these is ingestion. A published revision is ingested
 synchronously when a channel is pointed at it, not on a schedule.
