@@ -2,7 +2,7 @@ import type { AppThemeApi } from '@backstage/core-plugin-api';
 import { appThemeApiRef } from '@backstage/core-plugin-api';
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MermaidDiagram } from './MermaidDiagram';
 
@@ -146,10 +146,14 @@ describe('MermaidDiagram', () => {
     select('dark');
 
     // Mermaid bakes colours into the svg, so a theme switch has to re-render
-    // rather than restyle.
-    await screen.findByTestId('mermaid-diagram');
-    expect(mockInitialize).toHaveBeenLastCalledWith(
-      expect.objectContaining({ theme: 'dark' }),
+    // rather than restyle. The element is already on screen from the light
+    // render, so a `findByTestId` here would resolve on its first poll and
+    // synchronise nothing — the re-render has to be awaited through the call
+    // being asserted on.
+    await waitFor(() =>
+      expect(mockInitialize).toHaveBeenLastCalledWith(
+        expect.objectContaining({ theme: 'dark' }),
+      ),
     );
   });
 });
