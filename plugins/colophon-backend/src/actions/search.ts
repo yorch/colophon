@@ -166,6 +166,7 @@ export function registerSearchAction(deps: ColophonActionDeps): void {
               channel: hit.channel,
               url: pageUrl({
                 appBaseUrl: deps.appBaseUrl,
+                appPath: deps.appPath,
                 bundleId: hit.bundleId,
                 slug: hit.slug,
                 channel: hit.channel,

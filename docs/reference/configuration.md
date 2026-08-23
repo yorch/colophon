@@ -11,6 +11,60 @@ All keys live under `colophon` in `app-config.yaml`. The backend ships a
 config schema, so a key that is not on this page is a validation error
 rather than a setting that quietly does nothing.
 
+## Where the page is mounted
+
+```yaml
+colophon:
+  appPath: /colophon
+```
+
+| Key | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `appPath` | no | `/colophon` | Must match the `path` of the `page:colophon/colophon` extension |
+
+Leave this alone unless you move the docs home page. If you do move it, this
+key has to move with it:
+
+```yaml
+app:
+  extensions:
+    - page:colophon/colophon:
+        config:
+          path: /handbook
+
+colophon:
+  appPath: /handbook
+```
+
+`/handbook`, `handbook` and `/handbook/` are all accepted and mean the same
+mount.
+
+### The hazard, stated plainly
+
+Two places name the mount, and only one of them is the truth. The frontend
+resolves its own links through the plugin's route ref, so the portal keeps
+working wherever the page is. **The backend has no router**: it builds every
+Backstage Search result location and every URL handed to an agent over MCP
+from `appPath` instead. Move the page and leave this key behind and nothing
+fails at startup — the page renders, search returns results, agents answer
+with citations, and every one of those links 404s.
+
+Because that is invisible until something is clicked, the frontend compares
+the two on load and warns in the browser console when they disagree, naming
+both paths:
+
+```text
+Colophon: the docs page is mounted at "/handbook" but colophon.appPath is
+"/colophon". The backend builds search result links and every URL it gives an
+agent from colophon.appPath, so all of them will 404 until it is set to
+"/handbook" in app-config.yaml.
+```
+
+Entity-scoped links are built from the catalog's own route
+(`/catalog/<namespace>/<kind>/<name>/docs`) and are not affected by this key.
+Moving the catalog plugin or the documentation tab is a separate problem that
+`appPath` does not solve.
+
 ## Storage
 
 Where published bundles are read from. The backend needs read-only access;

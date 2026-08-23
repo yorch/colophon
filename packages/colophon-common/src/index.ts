@@ -7,6 +7,7 @@
  */
 
 export * from './api';
+export * from './appPath';
 export * from './chunks';
 export * from './config';
 export * from './frontmatter';

@@ -18,6 +18,21 @@ import type { SchedulerServiceTaskScheduleDefinitionConfig } from '@backstage/ba
 export interface Config {
   colophon?: {
     /**
+     * Where the frontend mounts the docs home page. Set this to match
+     * `page:colophon`'s configured `path` whenever you move the page.
+     *
+     * The backend has no router and cannot discover the mount, yet it writes
+     * every search result location and every URL an agent is given. Leave
+     * this behind a remapped page and all of them 404. Read by the frontend
+     * too, which warns in the console when the two disagree — hence the
+     * frontend visibility, on a value that is a route and not a secret.
+     *
+     * @visibility frontend
+     * @default "/colophon"
+     */
+    appPath?: string;
+
+    /**
      * Where published bundles are read from. Omitted entirely, this is a
      * `local` store under ./colophon-storage — a development default, not a
      * deployment one.

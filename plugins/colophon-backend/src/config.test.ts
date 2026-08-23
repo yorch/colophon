@@ -1,6 +1,13 @@
 import { mockServices } from '@backstage/backend-test-utils';
 import { DEFAULT_ENTITY_LINK_SCHEDULE, readColophonConfig } from './config';
 
+const read = (colophon: object) =>
+  readColophonConfig(
+    mockServices.rootConfig({
+      data: { app: { baseUrl: 'http://localhost:3000' }, colophon },
+    }),
+  );
+
 /**
  * The schedule keys are a contract with `app-config.yaml`, and a unit that the
  * reader does not understand is not an error — it is dropped, and the default
@@ -9,13 +16,6 @@ import { DEFAULT_ENTITY_LINK_SCHEDULE, readColophonConfig } from './config';
  * logged. Asserting the returned object is the only way to see it.
  */
 describe('readColophonConfig schedules', () => {
-  const read = (colophon: object) =>
-    readColophonConfig(
-      mockServices.rootConfig({
-        data: { app: { baseUrl: 'http://localhost:3000' }, colophon },
-      }),
-    );
-
   it('honours sub-minute frequencies', () => {
     const { entityLinkSchedule } = read({
       schedule: {
@@ -56,5 +56,26 @@ describe('readColophonConfig schedules', () => {
     expect(() =>
       read({ schedule: { entityLinks: { frequency: { seconds: 30 } } } }),
     ).toThrow(/timeout/);
+  });
+});
+
+/**
+ * The one config value the backend cannot check for itself: it has no router,
+ * so a wrong `appPath` produces links that are well-formed and 404. Everything
+ * downstream concatenates this value, so it has to arrive in one shape.
+ */
+describe('readColophonConfig appPath', () => {
+  it('defaults to where PageBlueprint mounts the page', () => {
+    expect(read({}).appPath).toBe('/colophon');
+  });
+
+  it('normalises whatever spelling the operator wrote', () => {
+    for (const written of ['/handbook', 'handbook', '/handbook/']) {
+      expect(read({ appPath: written }).appPath).toBe('/handbook');
+    }
+  });
+
+  it('renders a root mount as the empty string, so links stay single-slashed', () => {
+    expect(read({ appPath: '/' }).appPath).toBe('');
   });
 });

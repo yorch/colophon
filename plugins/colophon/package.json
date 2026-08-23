@@ -20,6 +20,7 @@
   },
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "configSchema": "config.d.ts",
   "publishConfig": {
     "access": "public",
     "main": "dist/index.esm.js",
@@ -76,6 +77,7 @@
     "react-router-dom": "^6.28.0"
   },
   "files": [
+    "config.d.ts",
     "dist"
   ]
 }

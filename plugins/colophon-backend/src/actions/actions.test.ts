@@ -71,6 +71,7 @@ async function setup() {
     colophon: harness.colophon,
     authorizer: harness.authorizer,
     appBaseUrl: APP_URL,
+    appPath: '/colophon',
   });
 
   return {
