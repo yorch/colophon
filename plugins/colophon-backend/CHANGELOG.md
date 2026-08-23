@@ -1,5 +1,76 @@
 # @brnby/plugin-colophon-backend
 
+## 0.2.0
+
+### Minor Changes
+
+- [#23](https://github.com/yorch/colophon/pull/23) [`880e1a5`](https://github.com/yorch/colophon/commit/880e1a58953194cf0bea58f601b4339728f17e94) Thanks [@yorch](https://github.com/yorch)! - Declare a config schema for `colophon.*`, and read schedules the way the rest
+  of Backstage does.
+  
+  The backend contributed no schema, so Backstage silently ignored any unknown
+  or misspelled key beneath `colophon` — the failure mode that once made
+  `storage.local.directory` be read as `storage.local.root`, with successful
+  publishes and 404ing reads. `config.d.ts` now covers every key the code
+  actually reads, and both S3 credential keys are marked `visibility: secret`.
+  
+  `colophon.schedule.entityLinks` and `colophon.schedule.searchIndex` are now
+  parsed by `readSchedulerServiceTaskScheduleDefinitionFromConfig`, so `seconds`,
+  `hours`, `days`, ISO duration strings, cron expressions and `scope` all behave
+  here as they do everywhere else in the platform. The hand-rolled reader they
+  replace understood `frequency.minutes` alone and dropped anything else — a
+  `frequency: { seconds: 30 }` ran at the ten-minute default instead.
+  
+  Two consequences worth knowing before upgrading:
+  
+  - A `schedule.<task>` block must now carry both `frequency` and `timeout`.
+    Previously either could be omitted and quietly completed from the defaults,
+    which is exactly how the dropped value hid. Omitting the whole block still
+    falls back to the default schedule.
+  - `ColophonConfig.entityLinkSchedule` and `.searchIndexSchedule` are typed
+    `SchedulerServiceTaskScheduleDefinition` rather than the package's own
+    `TaskSchedule`, which is no longer exported.
+
+- [#25](https://github.com/yorch/colophon/pull/25) [`2c4ec7d`](https://github.com/yorch/colophon/commit/2c4ec7d90198bfaa50005af8beb05ed7951655a1) Thanks [@yorch](https://github.com/yorch)! - Add deletion and garbage collection. Nothing could previously be retired:
+  `ColophonDatabase.deleteChannel` and `deleteRevisions` had no callers, so a
+  `pr-42`-channel-per-pull-request workflow accumulated channels, revisions,
+  pages and chunks forever, and the docs home listed every decommissioned
+  repository until someone ran SQL by hand.
+  
+  - `DELETE /bundles/:bundleId/channels/:channel` and `DELETE /bundles/:bundleId`,
+    both behind `colophon.docs.publish`. They act immediately; the permission
+    check is the gate. Deleting the bundle's default channel on its own is
+    refused with 409 — it would leave a bundle listed everywhere and resolvable
+    by nothing.
+  - `GET /revisions` reports every retained revision, which is what a collector
+    needs and cannot derive from the bundle list.
+  - `colophon delete-channel`, `colophon delete-bundle`, and `colophon gc`.
+  - `colophon gc` is **dry run by default**: it reports counts and bytes and
+    exits. `--confirm` performs the sweep.
+  
+  Blobs are content-addressed into one flat namespace shared by every bundle, so
+  `gc` unions the referenced set across every retained revision of every bundle
+  before considering anything unreferenced — a per-bundle computation would
+  delete the other repository's live content.
+  
+  `BundleStorage` in `@brnby/colophon-cli` gains `list` and `delete`, which is
+  breaking for anyone who implemented that interface themselves. The backend's
+  own storage interface is unchanged and still read-only.
+
+### Patch Changes
+
+- [#24](https://github.com/yorch/colophon/pull/24) [`adfda81`](https://github.com/yorch/colophon/commit/adfda8169e6c201eba06fd2f2a43f0da7a8ae83c) Thanks [@yorch](https://github.com/yorch)! - Build backend links from a new `colophon.appPath` config key instead of a
+  hardcoded `/colophon`. The frontend fix for this shipped as a route ref, which
+  the backend cannot use: it has no router, and it is the half that writes every
+  Backstage Search result location and every URL handed to an agent over MCP. An
+  app that moved the page with `page:colophon/colophon` had all of them 404.
+  
+  Because a second copy of a value drifts silently, the frontend now compares the
+  route ref's resolved path against `colophon.appPath` on mount and warns in the
+  console when they disagree, naming both paths. The key is declared
+  `@visibility frontend` so the browser can read it.
+- Updated dependencies [[`adfda81`](https://github.com/yorch/colophon/commit/adfda8169e6c201eba06fd2f2a43f0da7a8ae83c), [`2c4ec7d`](https://github.com/yorch/colophon/commit/2c4ec7d90198bfaa50005af8beb05ed7951655a1)]:
+  - @brnby/colophon-common@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

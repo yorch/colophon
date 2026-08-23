@@ -1,5 +1,12 @@
 # @brnby/plugin-colophon-react
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies [[`adfda81`](https://github.com/yorch/colophon/commit/adfda8169e6c201eba06fd2f2a43f0da7a8ae83c), [`2c4ec7d`](https://github.com/yorch/colophon/commit/2c4ec7d90198bfaa50005af8beb05ed7951655a1)]:
+  - @brnby/colophon-common@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes
