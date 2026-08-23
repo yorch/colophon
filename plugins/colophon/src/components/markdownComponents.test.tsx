@@ -1,13 +1,16 @@
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
 import {
+  type ColophonComponents,
   ColophonComponentsProvider,
-  ColophonMarkdown,
+  type ImageProps,
+  type LinkProps,
 } from '@brnby/plugin-colophon-react';
 import { screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import type { ColophonApi } from '../api';
 import { colophonApiRef } from '../api';
-import { useMarkdownComponents } from './markdownComponents';
+import { PageMarkdown, useColophonReference } from './markdownComponents';
 
 const api = {
   assetUrl: async (bundleId: string, path: string) =>
@@ -22,24 +25,27 @@ function Harness({
   content: string;
   fromPath?: string;
 }) {
-  const components = useMarkdownComponents({
-    bundleId: 'github.com/org/repo',
-    fromPath,
-    hrefForSlug: slug => `?page=${encodeURIComponent(slug)}`,
-  });
   return (
-    <ColophonComponentsProvider components={components}>
-      <ColophonMarkdown content={content} />
-    </ColophonComponentsProvider>
+    <PageMarkdown
+      content={content}
+      context={{
+        bundleId: 'github.com/org/repo',
+        fromPath,
+        hrefForSlug: slug => `?page=${encodeURIComponent(slug)}`,
+      }}
+    />
   );
 }
 
-const render = (content: string, fromPath?: string) =>
+const renderIn = (tree: ReactNode, failing?: ColophonApi) =>
   renderInTestApp(
-    <TestApiProvider apis={[[colophonApiRef, api]]}>
-      <Harness content={content} fromPath={fromPath} />
+    <TestApiProvider apis={[[colophonApiRef, failing ?? api]]}>
+      {tree}
     </TestApiProvider>,
   );
+
+const render = (content: string, fromPath?: string) =>
+  renderIn(<Harness content={content} fromPath={fromPath} />);
 
 describe('relative links', () => {
   it('rewrites a sibling page link into a portal href', async () => {
@@ -131,12 +137,80 @@ describe('images', () => {
         throw new Error('nope');
       },
     } as unknown as ColophonApi;
-    await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, failing]]}>
-        <Harness content={'![Broken](./_assets/missing.png)\n'} />
-      </TestApiProvider>,
+    await renderIn(
+      <Harness content={'![Broken](./_assets/missing.png)\n'} />,
+      failing,
     );
     // A broken image must not take the page down with it.
     expect(await screen.findByAltText('Broken')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The registry merges outer-to-inner, and Colophon's own provider is the inner
+ * one — so for a long time it shadowed the app's `link` and `image` no matter
+ * what the app asked for. Five slots were overridable and two silently were
+ * not, which is worse than either answer on its own.
+ */
+describe('adopter overrides', () => {
+  /** An override written the way an adopter would: no Colophon internals. */
+  function BrandLink({ href, title, children }: LinkProps) {
+    const resolved = useColophonReference(href);
+    return (
+      <a data-testid="brand-link" href={resolved.href} title={title}>
+        {children}
+      </a>
+    );
+  }
+
+  function BrandImage({ src, alt }: ImageProps) {
+    const resolved = useColophonReference(src);
+    return <img data-testid="brand-image" src={resolved.href} alt={alt} />;
+  }
+
+  const withOverride = (components: ColophonComponents, content: string) =>
+    renderIn(
+      <ColophonComponentsProvider components={components}>
+        <Harness content={content} />
+      </ColophonComponentsProvider>,
+    );
+
+  it('lets the app win the link slot', async () => {
+    await withOverride({ link: BrandLink }, '[Rollback](./rollback.md)\n');
+    expect(await screen.findByTestId('brand-link')).toBeInTheDocument();
+  });
+
+  it('still resolves a relative link inside that override', async () => {
+    // The point of exporting the resolver: an override that skips it turns
+    // every `[x](./y.md)` in every published page into a 404.
+    await withOverride({ link: BrandLink }, '[Rollback](./rollback.md)\n');
+    await waitFor(() =>
+      expect(screen.getByTestId('brand-link').getAttribute('href')).toMatch(
+        /\?page=guides%2Frollback$/,
+      ),
+    );
+  });
+
+  it('keeps resolving images while the app owns only links', async () => {
+    // Slots are claimed one at a time; overriding `link` must not cost the
+    // adopter image resolution as well.
+    await withOverride({ link: BrandLink }, '![Diagram](./_assets/flow.png)\n');
+    await waitFor(() =>
+      expect(screen.getByAltText('Diagram')).toHaveAttribute(
+        'src',
+        '/api/colophon/bundles/github.com%2Forg%2Frepo/assets/guides/_assets/flow.png',
+      ),
+    );
+  });
+
+  it('lets the app win the image slot', async () => {
+    const image = '![Diagram](./_assets/flow.png)\n';
+    await withOverride({ image: BrandImage }, image);
+    await waitFor(() =>
+      expect(screen.getByTestId('brand-image')).toHaveAttribute(
+        'src',
+        '/api/colophon/bundles/github.com%2Forg%2Frepo/assets/guides/_assets/flow.png',
+      ),
+    );
   });
 });

@@ -30,7 +30,11 @@ export {
   useColophonComponents,
 } from './registry';
 export { colophonSanitizeSchema } from './sanitizeSchema';
-export { useColophonStyles } from './styles';
+export {
+  COLOPHON_STYLE_ELEMENT_ID,
+  ensureColophonStyles,
+  useColophonStyles,
+} from './styles';
 export type {
   CodeBlockProps,
   CodeProps,
