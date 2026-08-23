@@ -14,6 +14,8 @@ export interface ColophonActionDeps {
    */
   authorizer: DocsAuthorizer;
   appBaseUrl: string;
+  /** Where the frontend mounts the docs home page; see ColophonConfig. */
+  appPath: string;
 }
 
 /** Every action shares this pair, so one sentence explains it once. */

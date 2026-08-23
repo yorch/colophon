@@ -96,6 +96,7 @@ export function registerListPagesAction(deps: ColophonActionDeps): void {
             tags: page.tags,
             url: pageUrl({
               appBaseUrl: deps.appBaseUrl,
+              appPath: deps.appPath,
               bundleId: target.bundleId,
               slug: page.slug,
               channel: channel.channel,

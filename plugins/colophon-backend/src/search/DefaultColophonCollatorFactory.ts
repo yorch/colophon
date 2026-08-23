@@ -89,15 +89,22 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
   readonly #discovery: DiscoveryService;
   readonly #auth: AuthService;
   readonly #logger: LoggerService;
+  readonly #appPath: string;
 
   constructor(options: {
     discovery: DiscoveryService;
     auth: AuthService;
     logger: LoggerService;
+    /**
+     * Where the frontend mounts the docs home page. Every `location` below is
+     * built from it, so getting it wrong 404s the whole result type at once.
+     */
+    appPath: string;
   }) {
     this.#discovery = options.discovery;
     this.#auth = options.auth;
     this.#logger = options.logger;
+    this.#appPath = options.appPath;
   }
 
   async getCollator(): Promise<Readable> {
@@ -173,6 +180,7 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
       // agent wants the table rather than a flattening of it.
       text: plainText(row.text),
       location: pagePath({
+        appPath: this.#appPath,
         bundleId: row.bundle_id,
         slug: row.slug,
         channel: row.channel,

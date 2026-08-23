@@ -4,6 +4,12 @@
 # is documented in docs/reference/configuration.md.
 
 colophon:
+  # Where the frontend mounts the docs home page. Only needed if you move it
+  # with `app.extensions: [page:colophon/colophon: {config: {path: ...}}]` —
+  # but then it is REQUIRED, because the backend has no router and builds
+  # every search result link and every agent-facing URL from this value.
+  # appPath: /colophon
+
   storage:
     type: s3
     s3:

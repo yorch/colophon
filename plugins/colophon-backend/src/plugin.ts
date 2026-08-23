@@ -46,7 +46,8 @@ export const colophonPlugin = createBackendPlugin({
         catalog,
         permissions,
       }) {
-        const { appBaseUrl, entityLinkSchedule } = readColophonConfig(config);
+        const { appBaseUrl, appPath, entityLinkSchedule } =
+          readColophonConfig(config);
         const colophon = await createColophonService({
           config,
           database,
@@ -77,6 +78,7 @@ export const colophonPlugin = createBackendPlugin({
           colophon,
           authorizer,
           appBaseUrl,
+          appPath,
         });
 
         await scheduler.scheduleTask({

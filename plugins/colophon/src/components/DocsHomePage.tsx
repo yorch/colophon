@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import type { BundleSummary } from '../api';
 import { colophonApiRef } from '../api';
+import { useAppPathDriftWarning } from '../appPathDrift';
 import { colophonRouteRef } from '../plugin';
 import { DocsBrowser } from './DocsBrowser';
 import { StateMessage } from './StateMessage';
@@ -20,6 +21,10 @@ import { StateMessage } from './StateMessage';
  * would be ambiguous with the tail of the id.
  */
 export function DocsHomePage() {
+  // Here rather than in a child route, so it is said once when the page is
+  // opened rather than again on every navigation within it.
+  useAppPathDriftWarning();
+
   return (
     <Routes>
       <Route path="/" element={<BundleList />} />

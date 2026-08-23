@@ -4,6 +4,7 @@ import {
   type SchedulerServiceTaskScheduleDefinition,
 } from '@backstage/backend-plugin-api';
 import type { Config } from '@backstage/config';
+import { DEFAULT_APP_PATH, normalizeAppPath } from '@brnby/colophon-common';
 import {
   type ChunkingOptions,
   chunkingOptionsSchema,
@@ -23,6 +24,17 @@ export interface ColophonConfig {
   };
   /** Base URL of the portal, used to build citable deep links. */
   appBaseUrl: string;
+  /**
+   * Where the frontend mounts the docs home page, normalised.
+   *
+   * The backend has no router, so it cannot discover this the way the docs
+   * home page does — and it is the half that writes every search result
+   * location and every URL handed to an agent. An app that remaps the page
+   * with `page:colophon: { config: { path: /handbook } }` and leaves this
+   * alone gets links that 404, which is why the frontend warns when the two
+   * disagree rather than leaving it to be found by clicking.
+   */
+  appPath: string;
   /**
    * How often the catalog is re-read for `brnby.io/colophon` annotations.
    *
@@ -79,6 +91,11 @@ export function readColophonConfig(config: RootConfigService): ColophonConfig {
         DEFAULT_REVISIONS_PER_CHANNEL,
     },
     appBaseUrl: config.getString('app.baseUrl'),
+    // Normalised here and nowhere else, so `/handbook/` and `handbook` become
+    // one value before anything compares or concatenates it.
+    appPath: normalizeAppPath(
+      root?.getOptionalString('appPath') ?? DEFAULT_APP_PATH,
+    ),
     entityLinkSchedule: readSchedule(
       root?.getOptionalConfig('schedule.entityLinks'),
       DEFAULT_ENTITY_LINK_SCHEDULE,

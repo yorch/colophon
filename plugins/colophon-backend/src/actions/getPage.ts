@@ -118,6 +118,7 @@ export function registerGetPageAction(deps: ColophonActionDeps): void {
           partial,
           url: pageUrl({
             appBaseUrl: deps.appBaseUrl,
+            appPath: deps.appPath,
             bundleId: target.bundleId,
             slug,
             channel: resolved.channel.channel,

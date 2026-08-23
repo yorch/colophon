@@ -172,6 +172,7 @@ describeEachBackend('authorization', backend => {
         colophon: h.colophon,
         authorizer: h.authorizer,
         appBaseUrl: 'http://localhost:3000',
+        appPath: '/colophon',
       });
 
       await expect(

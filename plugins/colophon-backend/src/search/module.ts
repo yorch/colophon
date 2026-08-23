@@ -41,7 +41,7 @@ export const searchModuleColophonCollator = createBackendModule({
         discovery,
         auth,
       }) {
-        const { searchIndexSchedule } = readColophonConfig(config);
+        const { appPath, searchIndexSchedule } = readColophonConfig(config);
 
         indexRegistry.addCollator({
           schedule: scheduler.createScheduledTaskRunner(searchIndexSchedule),
@@ -49,6 +49,7 @@ export const searchModuleColophonCollator = createBackendModule({
             discovery,
             auth,
             logger,
+            appPath,
           }),
         });
       },

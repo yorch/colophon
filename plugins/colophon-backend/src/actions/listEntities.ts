@@ -99,6 +99,7 @@ export function registerListEntitiesAction(deps: ColophonActionDeps): void {
               channels: bundle?.channels.map(c => c.channel) ?? [],
               url: pageUrl({
                 appBaseUrl: deps.appBaseUrl,
+                appPath: deps.appPath,
                 bundleId: link.bundleId,
                 slug: link.subpath ?? '',
                 entityRef: link.entityRef,

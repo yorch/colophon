@@ -11,6 +11,7 @@ import { DEFAULT_CHANNEL } from '@brnby/colophon-common';
  */
 export function pageUrl(options: {
   appBaseUrl: string;
+  appPath: string;
   bundleId: string;
   slug: string;
   channel?: string;
@@ -29,6 +30,16 @@ export function pageUrl(options: {
  * app — the MCP tools, whose reader has no app to be inside — need the origin.
  */
 export function pagePath(options: {
+  /**
+   * Where the frontend mounts the docs home page, already normalised.
+   *
+   * Required rather than defaulted, because a default here is a link that
+   * silently points at the wrong place for every app that moved the page.
+   * It is read from config once, in `readColophonConfig`, and threaded down:
+   * this module stays a pure function library so its tests can stay a table
+   * of inputs and outputs.
+   */
+  appPath: string;
   bundleId: string;
   slug: string;
   channel?: string;
@@ -37,14 +48,14 @@ export function pagePath(options: {
 }): string {
   // Both a bundle id and a slug contain slashes, so only one of them can live
   // in the path without becoming ambiguous. The bundle id takes the path,
-  // because the frontend route is /colophon/* and reads the whole remainder as
+  // because the frontend route is <appPath>/* and reads the whole remainder as
   // the id; the page travels as a query parameter; and the fragment is left
   // free for a heading anchor, which is the one thing a fragment is actually
   // for. Percent-encoding the id instead would be prettier but relies on the
   // router preserving %2F through the splat, which is not dependable.
   const path = options.entityRef
     ? entityDocsPath(options.entityRef)
-    : `/colophon/${options.bundleId}`;
+    : `${options.appPath}/${options.bundleId}`;
 
   const query = new URLSearchParams();
   if (options.slug) {
@@ -59,6 +70,18 @@ export function pagePath(options: {
   return `${path}${search ? `?${search}` : ''}${anchor}`;
 }
 
+/**
+ * The catalog route, which `appPath` deliberately does NOT reach.
+ *
+ * This looks like the same hardcoding the docs home page had, and it is not
+ * quite: `/catalog` is the catalog plugin's mount and `docs` is the tab path
+ * of our own entity-content extension, so an app that moved either has moved
+ * something Colophon does not own and cannot be told about by one key. Both
+ * are remappable in principle, and an app that does it gets broken entity
+ * links here — a real but separate defect, needing its own configuration
+ * (or, better, a route ref resolved on the frontend) rather than a second
+ * meaning for this one.
+ */
 function entityDocsPath(entityRef: string): string {
   const { kind, namespace, name } = parseEntityRef(entityRef);
   return `/catalog/${encodeURIComponent(namespace)}/${encodeURIComponent(

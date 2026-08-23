@@ -3,8 +3,16 @@ import { pagePath, pageUrl } from './links';
 const BASE = 'https://portal.example.com';
 const BUNDLE = 'github.com/org/repo';
 
+const APP_PATH = '/colophon';
+
 const url = (over: Partial<Parameters<typeof pageUrl>[0]> = {}) =>
-  pageUrl({ appBaseUrl: BASE, bundleId: BUNDLE, slug: '', ...over });
+  pageUrl({
+    appBaseUrl: BASE,
+    appPath: APP_PATH,
+    bundleId: BUNDLE,
+    slug: '',
+    ...over,
+  });
 
 /**
  * These URLs are the only thing tying an agent's answer back to a source a
@@ -66,7 +74,12 @@ describe('pageUrl', () => {
 
   it('tolerates a trailing slash on the configured base url', () => {
     expect(
-      pageUrl({ appBaseUrl: `${BASE}/`, bundleId: BUNDLE, slug: 'a' }),
+      pageUrl({
+        appBaseUrl: `${BASE}/`,
+        appPath: APP_PATH,
+        bundleId: BUNDLE,
+        slug: 'a',
+      }),
     ).toBe(`${BASE}/colophon/${BUNDLE}?page=a`);
   });
 
@@ -94,7 +107,7 @@ describe('pageUrl', () => {
  */
 describe('pagePath', () => {
   const path = (over: Partial<Parameters<typeof pagePath>[0]> = {}) =>
-    pagePath({ bundleId: BUNDLE, slug: '', ...over });
+    pagePath({ appPath: APP_PATH, bundleId: BUNDLE, slug: '', ...over });
 
   it('is app-relative, so the router treats it as internal', () => {
     expect(path()).toBe(`/colophon/${BUNDLE}`);
@@ -117,5 +130,38 @@ describe('pagePath', () => {
 
   it('keeps the fragment, which is the point of a search result', () => {
     expect(path({ slug: 'a', anchor: 'chunking' })).toMatch(/#chunking$/);
+  });
+});
+
+/**
+ * The mount path is configuration, not a constant, because the backend has no
+ * router to ask. These are the cases where getting that wrong is invisible:
+ * the URL is still well-formed, so nothing fails until it is followed.
+ */
+describe('the configured app path', () => {
+  it('is where a bundle link is rooted', () => {
+    expect(pagePath({ appPath: '/handbook', bundleId: BUNDLE, slug: '' })).toBe(
+      `/handbook/${BUNDLE}`,
+    );
+  });
+
+  it('survives a mount at the app root without doubling the slash', () => {
+    // '//github.com/org/repo' is a protocol-relative URL, which the browser
+    // would resolve against the wrong host entirely.
+    expect(pagePath({ appPath: '', bundleId: BUNDLE, slug: '' })).toBe(
+      `/${BUNDLE}`,
+    );
+  });
+
+  it('does not reach the entity route, which the catalog owns', () => {
+    // A different path with its own owner — see entityDocsPath.
+    expect(
+      pagePath({
+        appPath: '/handbook',
+        bundleId: BUNDLE,
+        slug: '',
+        entityRef: 'component:default/api',
+      }),
+    ).toBe('/catalog/default/component/api/docs');
   });
 });
