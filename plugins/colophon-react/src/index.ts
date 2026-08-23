@@ -6,10 +6,7 @@
  * render the same way and are restyled in the same place.
  */
 
-export type {
-  ColophonMarkdownProps,
-  ColophonPluginList,
-} from './components/ColophonMarkdown';
+export type { ColophonMarkdownProps } from './components/ColophonMarkdown';
 export { ColophonMarkdown } from './components/ColophonMarkdown';
 export type { ColophonNavProps } from './components/ColophonNav';
 export { ColophonNav } from './components/ColophonNav';
@@ -27,6 +24,15 @@ export {
   defaultCodeLanguages,
   defaultColophonComponents,
 } from './defaultComponents';
+export type {
+  ColophonPipeline,
+  ColophonPipelineProviderProps,
+  ColophonPluginList,
+} from './pipeline';
+export {
+  ColophonPipelineProvider,
+  useColophonPipeline,
+} from './pipeline';
 export type { ColophonComponentsProviderProps } from './registry';
 export {
   ColophonComponentsProvider,

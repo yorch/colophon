@@ -13,8 +13,10 @@ export const COLOPHON_STYLE_ELEMENT_ID = 'colophon-markdown-styles';
 /**
  * The cascade layer every rule below is emitted into.
  *
- * Exported so an app can order it against its own layers —
- * `@layer colophon, app;` — without hardcoding the name.
+ * Exported so an app can name it in its own `@layer` statement and choose
+ * where it sits, without hardcoding the string. Later layers win, so the
+ * order to write depends on which side should — see the customisation guide
+ * rather than copying an example from here.
  */
 export const COLOPHON_STYLE_LAYER = 'colophon';
 

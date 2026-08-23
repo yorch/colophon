@@ -68,6 +68,10 @@ describe('mergeComponents', () => {
    * exactly as it did before, so the search starts in the component.
    */
   describe('unknown slots', () => {
+    // The dedupe set is module-global, which is what makes the warning fire
+    // once across re-renders rather than once per merge. The price is that
+    // every case here must use a key no other case has used, or it inherits
+    // the previous one's "already warned" state.
     const cast = (components: Record<string, unknown>) =>
       components as ColophonComponents;
 

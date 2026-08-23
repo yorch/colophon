@@ -112,8 +112,12 @@ function DefaultList({ ordered, start, children }: ListProps) {
   return ordered ? <ol start={start}>{children}</ol> : <ul>{children}</ul>;
 }
 
-function DefaultListItem({ className, children }: ListItemProps) {
-  return <li className={className}>{children}</li>;
+function DefaultListItem({ id, className, children }: ListItemProps) {
+  return (
+    <li id={id} className={className}>
+      {children}
+    </li>
+  );
 }
 
 function DefaultTableHead({ children }: TableHeadProps) {

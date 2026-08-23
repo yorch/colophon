@@ -76,6 +76,13 @@ export interface ListProps {
 /** Props given to the renderer for a list item. */
 export interface ListItemProps {
   /**
+   * Anchor id, when something upstream gave the item one — a GFM footnote
+   * definition is the case that exists today, and its back-link targets this.
+   * Passed through because a slot's props are a fixed contract: an id the
+   * component never receives is an id that can never reach the DOM.
+   */
+  id?: string;
+  /**
    * Classes a remark plugin put on the item — `task-list-item` for a GFM
    * checkbox item, which is both the styling hook and the only signal that
    * the item's first child is a checkbox. Passed through because an override
@@ -132,9 +139,18 @@ export interface TableCellProps {
  * block. CSS already reaches every one of them through `.colophon-markdown
  * em`, an override could only re-wrap the same text, and a component boundary
  * on every emphasised word costs render work on every page for no capability
- * anyone gained. Two exceptions on the block side prove the same rule:
- * `hr` has no children to restructure, and `tbody` is a grouping wrapper with
- * no content of its own — CSS is sufficient for both, so neither has a slot.
+ * anyone gained.
+ *
+ * Three block-level constructs are carved out, and the carve-outs share a
+ * reason — there is nothing to restructure:
+ *
+ * - `hr` has no children at all.
+ * - `tbody` is a grouping wrapper with no content of its own.
+ * - `section`, which `remark-gfm` generates to hold footnotes, is emitted by
+ *   the pipeline rather than authored in Markdown. The rule is about
+ *   constructs a writer types.
+ *
+ * CSS reaches all three, so none has a slot.
  */
 export interface ColophonComponents {
   /** Inline `` `code` `` spans. */

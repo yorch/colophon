@@ -190,20 +190,78 @@ untouched.
 
 ## The Markdown pipeline
 
-`ColophonMarkdown` takes three props that reach the unified pipeline itself:
+Three knobs reach the unified pipeline itself:
 
-| Prop | Appended to | Runs |
+| Knob | Added after | Runs |
 | --- | --- | --- |
 | `remarkPlugins` | `remark-gfm` | on the Markdown tree, **before** sanitisation |
 | `rehypePlugins` | `rehype-sanitize` → `rehype-slug` | on the HTML tree, **after** sanitisation |
 | `sanitizeSchema` | replaces `colophonSanitizeSchema` | the sanitiser's allow-list |
 
-Built-ins are appended to, never replaced: `remark-gfm` keeps working, and the
+Built-ins keep their place: `remark-gfm` keeps working, and the
 sanitise-then-slug pair keeps its order — that ordering is what makes heading
 ids come out unprefixed and match the anchors the manifest recorded.
 
-Memoise the arrays. A new array identity on every render makes react-markdown
-reprocess the whole document.
+### Installing them: `ColophonPipelineProvider`
+
+These are props on `ColophonMarkdown`, but `DocsBrowser` owns that call site,
+so passing props is only available if you have built your own shell. For
+everyone else there is a context provider, installed exactly like
+`ColophonComponentsProvider` — same `AppRootWrapperBlueprint` path, same
+nesting rule:
+
+```tsx
+const colophonPipeline = AppRootWrapperBlueprint.make({
+  name: 'colophon-pipeline',
+  params: {
+    component: ({ children }) => (
+      <ColophonPipelineProvider
+        remarkPlugins={remarkPlugins}
+        sanitizeSchema={schema}
+      >
+        {children}
+      </ColophonPipelineProvider>
+    ),
+  },
+});
+```
+
+Providers nest: plugin lists concatenate outer-then-inner and a schema
+replaces the one above it, so an app-wide provider survives a page-level one.
+A prop on `ColophonMarkdown` is added after whatever the provider supplied.
+
+### Naming a built-in plugin is rejected
+
+`unified` matches plugins by **function identity**, not by position. Naming a
+plugin the pipeline already runs does not append a second pass — it rewrites
+the existing entry in place, merging your options into it and leaving it where
+it was. So this reads as "also slug, with a prefix" and means "reconfigure
+Colophon's slug pass":
+
+```tsx
+// Throws. Without the guard: <h2 id="user-content-rotating-credentials">,
+// the manifest's anchor is "rotating-credentials", and every table-of-contents
+// link on the page is dead — silently.
+<ColophonMarkdown
+  content={content}
+  rehypePlugins={[[rehypeSlug, { prefix: 'user-content-' }]]}
+/>
+```
+
+So `rehype-sanitize` and `rehype-slug` are rejected in `rehypePlugins`:
+
+- **With options — throws.** For the sanitiser because it is a second,
+  unsupported route into a security boundary that `sanitizeSchema` already
+  owns; for slug because dead anchors on every page is exactly the kind of
+  silent, total failure a console warning would not save you from.
+- **Without options — warns.** Such an entry is genuinely inert, so nothing is
+  broken. It only warns because a bare `rehypeSlug` is half of the standard
+  `rehype-autolink-headings` recipe, which works here, and rejecting it would
+  break a correct setup over a redundant line.
+
+The same identity rule applies to `remark-gfm`, which is *not* guarded: there
+the merge does something reasonable, so `[remarkGfm, { singleTilde: false }]`
+is the supported way to change its options.
 
 ### A remark plugin needs a schema to match
 
@@ -249,19 +307,21 @@ repository chooses what this renders — so the schema is a security boundary,
 not a formatting preference. `colophonSanitizeSchema` is GitHub's allow-list
 plus the three additions the renderer needs.
 
-**Do not reach for `rehype-raw`.** It reinstates the raw HTML that the
-pipeline otherwise drops, which is the whole attack surface the sanitiser
-exists to remove. If a feature needs another tag or attribute, allow that tag
-or attribute.
+**`rehype-raw` will not help, and that is on purpose.** react-markdown does
+put the page's raw HTML into the tree as `raw` nodes — but the sanitiser
+strips every one of them, and `rehypePlugins` run after it, so an appended
+`rehype-raw` finds nothing left to expand. It is inert rather than dangerous
+*because of the ordering*, and there is deliberately no slot before the
+sanitiser to change that. If a feature needs another tag or attribute, allow
+that tag or attribute.
 
 ### Rehype plugins run after the sanitiser
 
 That is deliberate — a syntax highlighter's spans and classes would be
 stripped otherwise — and it means their output is **not** checked. Safe
-because those plugins are your own code; the untrusted input is the page
-content, and a rehype plugin that lifts raw strings out of the tree and
-reinserts them as HTML hands that content back the one thing sanitisation took
-away.
+because those plugins are your own code rather than page content: the tree
+they receive has already been through the allow-list, so what they add is
+whatever you wrote, not whatever an author wrote.
 
 One limit worth knowing: a rehype plugin that decorates an element which has
 an override slot loses the decoration. Slot props are a fixed contract, so a

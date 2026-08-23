@@ -1,28 +1,18 @@
 import { stripFrontmatter } from '@brnby/colophon-common';
-import type { ComponentProps, CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Children, isValidElement, useMemo } from 'react';
 import type { Components } from 'react-markdown';
 import Markdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeSlug from 'rehype-slug';
 import remarkGfm from 'remark-gfm';
+import type { ColophonPluginList } from '../pipeline';
+import { assertNoReservedPlugins, useColophonPipeline } from '../pipeline';
 import { useColophonComponents } from '../registry';
 import type { SanitizeSchema } from '../sanitizeSchema';
 import { colophonSanitizeSchema } from '../sanitizeSchema';
 import { useColophonStyles } from '../styles';
 import type { CodeBlockProps, TableCellProps } from '../types';
-
-type MarkdownProps = ComponentProps<typeof Markdown>;
-
-/**
- * A list of unified plugins, exactly as react-markdown accepts it.
- *
- * Spelled as an indexed access rather than importing `PluggableList` from
- * `unified`, which this package does not depend on directly — the type is
- * react-markdown's to define, and taking it from there is what keeps the two
- * from drifting.
- */
-export type ColophonPluginList = NonNullable<MarkdownProps['remarkPlugins']>;
 
 export interface ColophonMarkdownProps {
   /** Markdown source, as published. */
@@ -30,27 +20,29 @@ export interface ColophonMarkdownProps {
   /** Added to the wrapper, for consumers that want their own prose rules. */
   className?: string;
   /**
-   * Remark plugins, appended after `remark-gfm`.
+   * Remark plugins, added after `remark-gfm` and after any a
+   * `ColophonPipelineProvider` supplies.
    *
    * These run on the Markdown syntax tree, so anything they emit still passes
    * through the sanitiser afterwards. That is the good case and the trap in
    * one: a plugin that emits an element or attribute the schema does not
    * allow gets it stripped, and the page renders as if the plugin were never
    * installed. Pair such a plugin with a widened {@link sanitizeSchema}.
-   *
-   * Memoise the array. A new identity each render makes react-markdown
-   * reprocess the whole document.
    */
   remarkPlugins?: ColophonPluginList;
   /**
-   * Rehype plugins, appended after `rehype-sanitize` and `rehype-slug`.
+   * Rehype plugins, added after `rehype-sanitize` and `rehype-slug`.
    *
-   * Appended, so they run AFTER sanitisation and their output is not checked
-   * — which is what a syntax highlighter or an id-decorator needs, and is
-   * only safe because these are the adopter's own code. Page content is the
-   * untrusted input here, not the plugin list; a rehype plugin that lifts raw
-   * strings out of the tree and reinserts them as HTML hands that input the
-   * one thing sanitisation took away. `rehype-raw` is exactly that plugin.
+   * They run AFTER sanitisation and their output is not checked — which is
+   * what a syntax highlighter or an id-decorator needs, and is only safe
+   * because these are the adopter's own code rather than page content.
+   *
+   * There is deliberately no way to run a plugin BEFORE the sanitiser, and
+   * naming `rehype-sanitize` or `rehype-slug` here is rejected rather than
+   * quietly reconfiguring the built-in pass — see `assertNoReservedPlugins`.
+   * That ordering is also why `rehype-raw` is inert here rather than
+   * dangerous: the sanitiser has already dropped every `raw` node before an
+   * appended plugin sees the tree.
    */
   rehypePlugins?: ColophonPluginList;
   /**
@@ -59,8 +51,8 @@ export interface ColophonMarkdownProps {
    * Extend the default rather than replacing it — page bodies come from
    * arbitrary repositories, so this is a security boundary, and the shipped
    * schema is GitHub's allow-list plus the three things the renderer needs.
-   * Widening it is how a remark plugin's new elements survive to the DOM.
-   * Do not reach for `rehype-raw` instead; see {@link rehypePlugins}.
+   * Widening it is how a remark plugin's new elements survive to the DOM, and
+   * it is the ONLY supported route to the sanitiser's configuration.
    */
   sanitizeSchema?: SanitizeSchema;
 }
@@ -78,9 +70,10 @@ export function ColophonMarkdown({
   className,
   remarkPlugins,
   rehypePlugins,
-  sanitizeSchema = colophonSanitizeSchema,
+  sanitizeSchema,
 }: ColophonMarkdownProps) {
   const overrides = useColophonComponents();
+  const ambient = useColophonPipeline();
 
   // Pages are stored whole, frontmatter included, so the renderer strips it
   // for the same reason the publisher and the chunker do — and using the
@@ -184,8 +177,12 @@ export function ColophonMarkdown({
           </ListComponent>
         );
       },
-      li({ className: itemClassName, children }) {
-        return <ListItem className={itemClassName}>{children}</ListItem>;
+      li({ id, className: itemClassName, children }) {
+        return (
+          <ListItem id={id} className={itemClassName}>
+            {children}
+          </ListItem>
+        );
       },
       table({ children }) {
         return <TableComponent>{children}</TableComponent>;
@@ -219,11 +216,19 @@ export function ColophonMarkdown({
     };
   }, [overrides]);
 
+  // A provider's additions come first, then this instance's props, so a
+  // page-level plugin composes onto an app-wide one rather than shadowing it.
   const remark = useMemo<ColophonPluginList>(
-    () =>
-      remarkPlugins ? [...REMARK_PLUGINS, ...remarkPlugins] : REMARK_PLUGINS,
-    [remarkPlugins],
+    () => [
+      ...REMARK_PLUGINS,
+      ...(ambient.remarkPlugins ?? []),
+      ...(remarkPlugins ?? []),
+    ],
+    [ambient.remarkPlugins, remarkPlugins],
   );
+
+  const schema =
+    sanitizeSchema ?? ambient.sanitizeSchema ?? colophonSanitizeSchema;
 
   /**
    * Sanitisation runs BEFORE slugging on purpose.
@@ -231,17 +236,19 @@ export function ColophonMarkdown({
    * The sanitiser treats `id` as clobberable and rewrites it to
    * `user-content-<id>`. Slugging afterwards leaves heading ids untouched, so
    * they match the `anchor` values the manifest recorded and
-   * table-of-contents links resolve. Adopter plugins go after both, so a
-   * plugin cannot displace that pair by being passed in.
+   * table-of-contents links resolve.
+   *
+   * Caller plugins are added after that pair, but "after" is not the same as
+   * "cannot reach it": `unified.use()` matches by attacher identity, so a
+   * caller naming one of the two rewrites its entry in place instead of
+   * appending. `assertNoReservedPlugins` is what actually keeps the pair
+   * intact — position alone does not.
    */
-  const rehype = useMemo<ColophonPluginList>(
-    () => [
-      [rehypeSanitize, sanitizeSchema],
-      rehypeSlug,
-      ...(rehypePlugins ?? []),
-    ],
-    [sanitizeSchema, rehypePlugins],
-  );
+  const rehype = useMemo<ColophonPluginList>(() => {
+    const caller = [...(ambient.rehypePlugins ?? []), ...(rehypePlugins ?? [])];
+    assertNoReservedPlugins(caller);
+    return [[rehypeSanitize, schema], rehypeSlug, ...caller];
+  }, [schema, ambient.rehypePlugins, rehypePlugins]);
 
   return (
     <div
