@@ -85,10 +85,9 @@
           </p>
 
           <p class="note note--status">
-            <strong>Not installable yet.</strong> Colophon is in early development and no
-            package has been published to a registry. The commands below are the shape the
-            workflow takes, run against the packages in this repository — they are not yet
-            an <code>npm install</code> away.
+            <strong>Status: early development.</strong> The packages are on npm and the
+            commands below run as written. The bundle contract may still change without a
+            schema version bump, so pin exact versions if you depend on them.
           </p>
 
           <!-- ---------------------------------------------- 01 annotation -->
@@ -201,14 +200,13 @@
             <p class="eyebrow">03</p>
             <h2 id="configure-h">Install and configure</h2>
             <p>
-              Releases go out under the <code>next</code> dist-tag while the bundle
-              contract is still moving, so ask for it explicitly.
+              Two packages, one for each workspace of a Backstage app.
             </p>
 
             <figure class="code bleed">
               <figcaption>shell</figcaption>
-              <pre><code>yarn workspace backend add @brnby/plugin-colophon-backend@next
-yarn workspace app add @brnby/plugin-colophon@next</code></pre>
+              <pre><code>yarn workspace backend add @brnby/plugin-colophon-backend
+yarn workspace app add @brnby/plugin-colophon</code></pre>
             </figure>
 
             <figure class="code bleed">
