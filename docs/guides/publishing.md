@@ -49,6 +49,42 @@ through `colophon:search` with an explicit `channel` filter.
     --channel ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
 ```
 
+## Retire what you opened
+
+A `pr-42` channel per pull request accumulates forever unless something closes
+it. Close it from the same workflow that opened it:
+
+```yaml
+- name: Retire the preview channel
+  if: github.event.action == 'closed'
+  run: |
+    npx @brnby/colophon-cli delete-channel \
+      "github.com/${{ github.repository }}" "pr-${{ github.event.number }}" \
+      --backend-url "$COLOPHON_BACKEND" --token "$COLOPHON_TOKEN"
+```
+
+Deleting a channel unpins the revisions it held; retention collects them once
+they fall outside its window. A revision a second channel still points at is
+untouched.
+
+For a decommissioned repository, `colophon delete-bundle <bundleId>` removes
+every channel, revision, page and chunk, which is what takes it out of the
+docs home and out of search. The default channel cannot be deleted on its own
+— a bundle nothing resolves against is listed everywhere and readable nowhere.
+
+Neither command touches object storage. `colophon gc` reclaims that, and it
+reports before it deletes:
+
+```bash
+colophon gc --backend-url "$COLOPHON_BACKEND" --token "$COLOPHON_TOKEN" \
+  --storage s3 --s3-bucket "$COLOPHON_BUCKET"
+```
+
+Blobs are shared by every bundle in the deployment — two repositories with the
+same LICENSE file store one object — so `gc` computes reachability across the
+whole corpus rather than per bundle. See the [CLI reference](../reference/cli.md)
+for the flags and the safety rules.
+
 ## Verify before you push
 
 `colophon validate ./docs` runs the same scan and validation as `publish`

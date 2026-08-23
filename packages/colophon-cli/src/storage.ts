@@ -1,24 +1,51 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import type { Dirent } from 'node:fs';
 import {
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
+import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 
+/** One object in the store, as a listing reports it. */
+export interface StoredObject {
+  key: string;
+  size: number;
+  /** Absent when the backend cannot report one; treated as "unknown age". */
+  lastModified?: Date;
+}
+
 /**
  * Where a published bundle is written.
  *
- * Deliberately the same three operations the backend's reader uses, so the
- * two halves of the contract stay recognisably the same shape. `has` exists
- * so the publisher can skip re-uploading a blob it already stored, which is
- * what makes retained history affordable.
+ * `has`, `put` and `get` are the publisher's half and mirror the backend's
+ * reader, so the two halves of the contract stay recognisably the same shape.
+ * `has` is what lets the publisher skip re-uploading a blob it already
+ * stored, which is what makes retained history affordable.
+ *
+ * `list` and `delete` exist for garbage collection, and only here. The
+ * backend is expected to hold read-only credentials — nothing it does ever
+ * writes to the bucket — so the one component that already needs write access
+ * is the one that gets the ability to remove things. `list` reports size and
+ * age because a sweep has to report bytes before it is confirmed, and has to
+ * be able to leave a just-uploaded object alone.
  */
 export interface BundleStorage {
   has(key: string): Promise<boolean>;
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   get(key: string): Promise<Buffer>;
+  list(prefix: string): Promise<StoredObject[]>;
+  delete(key: string): Promise<void>;
 }
 
 export class LocalBundleStorage implements BundleStorage {
@@ -49,6 +76,53 @@ export class LocalBundleStorage implements BundleStorage {
 
   async get(key: string): Promise<Buffer> {
     return readFile(this.#pathFor(key));
+  }
+
+  async list(prefix: string): Promise<StoredObject[]> {
+    const root = this.#pathFor(prefix);
+    const found: StoredObject[] = [];
+    // A missing prefix is an empty listing, not an error: a store that has
+    // never held an asset simply has no `blobs/` directory, and the collector
+    // asks for both namespaces unconditionally.
+    let entries: Dirent[];
+    try {
+      entries = await readdir(root, { recursive: true, withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      const absolute = join(entry.parentPath, entry.name);
+      const stats = await stat(absolute);
+      found.push({
+        // Keys are always `/`-separated; the filesystem separator is an
+        // implementation detail of this backend and must not leak into a key
+        // the caller then compares against blobKey().
+        key: absolute
+          .slice(this.#root.length + 1)
+          .split(sep)
+          .join('/'),
+        size: stats.size,
+        lastModified: stats.mtime,
+      });
+    }
+    return found;
+  }
+
+  async delete(key: string): Promise<void> {
+    try {
+      await unlink(this.#pathFor(key));
+    } catch (error) {
+      // Already absent is the outcome the caller wanted.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
   }
 }
 
@@ -134,5 +208,42 @@ export class S3BundleStorage implements BundleStorage {
       throw new Error(`Object "${key}" returned no body`);
     }
     return Buffer.from(await result.Body.transformToByteArray());
+  }
+
+  async list(prefix: string): Promise<StoredObject[]> {
+    const found: StoredObject[] = [];
+    let token: string | undefined;
+    // Paged to exhaustion rather than taking the first page. A truncated
+    // listing read as complete would report every object beyond the first
+    // thousand as unreferenced, and a sweep would then delete the corpus.
+    do {
+      const page = await this.#client.send(
+        new ListObjectsV2Command({
+          Bucket: this.#bucket,
+          Prefix: this.#key(prefix),
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of page.Contents ?? []) {
+        if (!object.Key) {
+          continue;
+        }
+        found.push({
+          // Reported without the configured prefix, so keys compare directly
+          // against the ones colophon-common computes.
+          key: object.Key.slice(this.#prefix.length),
+          size: object.Size ?? 0,
+          lastModified: object.LastModified,
+        });
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return found;
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.#client.send(
+      new DeleteObjectCommand({ Bucket: this.#bucket, Key: this.#key(key) }),
+    );
   }
 }

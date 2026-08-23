@@ -247,6 +247,37 @@ export class ColophonDatabase {
     return rows.map(toRevision);
   }
 
+  /**
+   * Every revision still on record, across every bundle, oldest first.
+   *
+   * Paginated and ordered by a stable key so a collector can page through a
+   * corpus larger than one response without a publish landing mid-walk
+   * shifting rows past its cursor.
+   */
+  async listRetainedRevisions(options: {
+    offset: number;
+    limit: number;
+  }): Promise<{
+    rows: Array<{ bundleId: string; revisionId: string }>;
+    total: number;
+  }> {
+    const [countRow] = await this.#knex('colophon_revisions').count({
+      total: '*',
+    });
+    const rows = await this.#knex<RevisionRow>('colophon_revisions')
+      .select('bundle_id', 'revision_id')
+      .orderBy(['bundle_id', 'revision_id'])
+      .limit(options.limit)
+      .offset(options.offset);
+    return {
+      rows: rows.map(row => ({
+        bundleId: row.bundle_id,
+        revisionId: row.revision_id,
+      })),
+      total: Number(countRow?.total ?? 0),
+    };
+  }
+
   async markIndexed(revisionId: string, at: string): Promise<void> {
     await this.#knex('colophon_revisions')
       .where('revision_id', revisionId)
@@ -363,6 +394,13 @@ export class ColophonDatabase {
       .where({ bundle_id: bundleId, channel })
       .delete();
     return deleted > 0;
+  }
+
+  /** Drops every channel of a bundle, unpinning its revisions. */
+  async deleteChannels(bundleId: string): Promise<number> {
+    return this.#knex('colophon_channels')
+      .where('bundle_id', bundleId)
+      .delete();
   }
 
   async listChannels(bundleId?: string): Promise<ChannelRecord[]> {

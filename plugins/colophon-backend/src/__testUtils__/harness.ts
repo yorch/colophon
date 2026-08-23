@@ -86,6 +86,8 @@ export async function createHarness(options: {
   visibleEntityRefs?: string[];
   /** Denies colophon.docs.read outright, as a policy would. */
   denyRead?: boolean;
+  /** Denies colophon.docs.publish, leaving reads allowed. */
+  denyPublish?: boolean;
   chunking?: ChunkingOptions;
   revisionsPerChannel?: number;
   bundleId?: string;
@@ -101,11 +103,20 @@ export async function createHarness(options: {
   });
   // A permission service and catalog that behave like an unconfigured
   // Backstage — allow everything — unless a test asks for less.
+  //
+  // Denials are keyed on the permission NAME rather than blanket, because
+  // read and publish are the whole point of being two permissions: a test
+  // about a write being refused must not also be silently testing that reads
+  // are refused.
+  const denied = new Set([
+    ...(options.denyRead ? ['colophon.docs.read'] : []),
+    ...(options.denyPublish ? ['colophon.docs.publish'] : []),
+  ]);
   const authorizer = createDocsAuthorizer({
     permissions: {
-      authorize: async (requests: unknown[]) =>
-        requests.map(() => ({
-          result: options.denyRead
+      authorize: async (requests: Array<{ permission: { name: string } }>) =>
+        requests.map(request => ({
+          result: denied.has(request.permission.name)
             ? AuthorizeResult.DENY
             : AuthorizeResult.ALLOW,
         })),

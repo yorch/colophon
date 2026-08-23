@@ -165,6 +165,14 @@ colophon publish ./docs \
 `colophon validate ./docs` runs the same scan and validation without
 uploading, which makes it a reasonable pre-commit hook.
 
+Retiring is the other half. `colophon delete-channel <bundleId> <channel>`
+closes a per-pull-request preview, `colophon delete-bundle <bundleId>` removes
+a decommissioned repository outright, and `colophon gc` reclaims the storage
+neither of them touches — reporting what it would delete and doing nothing
+until `--confirm`. Blobs are content-addressed into one namespace shared by
+every bundle, so `gc` computes reachability across the whole corpus rather
+than per bundle. See `docs/reference/cli.md`.
+
 Link an entity to a bundle with an annotation:
 
 ```yaml

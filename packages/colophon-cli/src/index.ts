@@ -8,17 +8,22 @@
 
 export { canonicalize } from './canonicalize';
 export { CliError, createCli } from './cli';
+export type { GcPlan } from './gc';
+export { DEFAULT_MIN_AGE_MS, executeGc, planGc } from './gc';
 export { main } from './main';
 export { buildNav, reachableSlugs } from './nav';
 export type { BuildResult, PublishOptions, UploadStats } from './publish';
 export { build, hasErrors, upload } from './publish';
 export { registerRevision } from './register';
+export type { BackendOptions } from './retire';
+export { deleteBundle, deleteChannel, listRetainedRevisions } from './retire';
 export type { ScanResult } from './scan';
 export { readDocsConfig, scan } from './scan';
 export {
   type BundleStorage,
   LocalBundleStorage,
   S3BundleStorage,
+  type StoredObject,
 } from './storage';
 export type { AssetDraft, Diagnostic, PageDraft } from './types';
 export { validate } from './validate';

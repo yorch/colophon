@@ -40,11 +40,18 @@ export const colophonDocsReadPermission = createPermission({
 });
 
 /**
- * Publishing a revision and repointing a channel.
+ * Publishing a revision, repointing a channel, and retiring either.
  *
  * Separate from reading because the callers are different: CI publishes with
  * a service token while people and agents only ever read. Splitting them lets
  * a deployment grant write to exactly one identity.
+ *
+ * Deletion is deliberately NOT a third permission. An identity that may
+ * repoint a channel can already make the revision it used to point at
+ * unreachable and let retention collect it, so a separate delete permission
+ * would advertise a boundary that does not exist — and the usual outcome of
+ * such a boundary is that it gets granted alongside publish anyway, by
+ * everyone, forever.
  */
 export const colophonDocsPublishPermission = createPermission({
   name: 'colophon.docs.publish',

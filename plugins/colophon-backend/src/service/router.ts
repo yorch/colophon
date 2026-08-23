@@ -54,7 +54,7 @@ function wildcardParam(req: Request): string | undefined {
   return (req.params as Record<string, string | undefined>)[0];
 }
 
-const indexableQuery = z.object({
+const pageQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
@@ -98,6 +98,22 @@ export async function createRouter(options: {
     const credentials = await httpAuth.credentials(req);
     await authorizer.assertCanRead(bundleId, credentials);
   };
+
+  /**
+   * Authenticates and authorises a write — publishing or retiring.
+   *
+   * Writes are checked BEFORE anything reads the bundle, so an unauthorised
+   * caller gets the same answer for a real bundle id and an invented one.
+   * Publishing must also reject an unauthenticated caller outright, even in a
+   * deployment that has relaxed the plugin-wide policy for reads.
+   */
+  const authorizeWrite = async (req: Request) => {
+    const credentials = await httpAuth.credentials(req, {
+      allow: ['user', 'service'],
+    });
+    await authorizer.assertCanPublish(credentials);
+  };
+
   const router = Router();
   router.use(express.json());
 
@@ -185,12 +201,7 @@ export async function createRouter(options: {
   });
 
   router.post('/bundles/:bundleId/revisions', async (req, res) => {
-    // Publishing is a write, so an unauthenticated caller must not reach it
-    // even if a deployment has relaxed the plugin-wide policy.
-    const credentials = await httpAuth.credentials(req, {
-      allow: ['user', 'service'],
-    });
-    await authorizer.assertCanPublish(credentials);
+    await authorizeWrite(req);
     const bundleId = parse(bundleIdSchema, req.params.bundleId);
     const body = parse(registerRevisionBody, req.body);
     const result = await colophon.registerRevision({ bundleId, ...body });
@@ -200,6 +211,54 @@ export async function createRouter(options: {
       indexed: result.ingest.indexed,
       chunkCount: result.ingest.chunkCount,
     });
+  });
+
+  /**
+   * Retiring a channel and retiring a bundle.
+   *
+   * Both act immediately — there is no dry-run flag and no soft delete. An
+   * API that answers a DELETE by doing nothing is worse than one that
+   * deletes, because a caller cannot tell it apart from success; the
+   * permission check above is the gate, and `colophon gc` is where the
+   * cautious, reversible-until-confirmed step lives.
+   *
+   * Both are gated on publish rather than a delete permission of their own:
+   * the identity that may replace what a channel points at can already
+   * destroy what it used to point at, so a separate permission would suggest
+   * a boundary that does not exist.
+   */
+  router.delete('/bundles/:bundleId/channels/:channel', async (req, res) => {
+    await authorizeWrite(req);
+    const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    const channel = parse(channelSchema, req.params.channel);
+    const result = await colophon.deleteChannel(bundleId, channel);
+    res.json({ bundleId, channel, ...result });
+  });
+
+  router.delete('/bundles/:bundleId', async (req, res) => {
+    await authorizeWrite(req);
+    const bundleId = parse(bundleIdSchema, req.params.bundleId);
+    const result = await colophon.deleteBundle(bundleId);
+    res.json({ bundleId, ...result });
+  });
+
+  /**
+   * Every revision the backend still keeps, paginated.
+   *
+   * This is the garbage collector's reachability input, which is why it is a
+   * route at all: blobs live in object storage and the collector runs beside
+   * the bucket, but what is still REFERENCED is only known here. Publish
+   * credentials rather than read ones, because it enumerates every bundle id
+   * in the deployment regardless of catalog visibility.
+   */
+  router.get('/revisions', async (req, res) => {
+    await authorizeWrite(req);
+    const { offset, limit } = parse(pageQuery, req.query);
+    const { rows, total } = await colophon.db.listRetainedRevisions({
+      offset,
+      limit,
+    });
+    res.json({ revisions: rows, total, offset, limit });
   });
 
   /**
@@ -214,7 +273,7 @@ export async function createRouter(options: {
     // Service credentials only: this is an internal projection of the whole
     // corpus, not something a browser should be able to page through.
     await httpAuth.credentials(req, { allow: ['service'] });
-    const { offset, limit } = parse(indexableQuery, req.query);
+    const { offset, limit } = parse(pageQuery, req.query);
     const { rows, total } = await colophon.db.listIndexableChunks({
       offset,
       limit,
