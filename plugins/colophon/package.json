@@ -1,6 +1,6 @@
 {
   "name": "@brnby/plugin-colophon",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Colophon frontend plugin — entity docs tab and cross-repository docs home.",
   "license": "MIT",
   "keywords": [
