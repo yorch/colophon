@@ -10,7 +10,38 @@ import { useEffect } from 'react';
  */
 export const COLOPHON_STYLE_ELEMENT_ID = 'colophon-markdown-styles';
 
+/**
+ * The cascade layer every rule below is emitted into.
+ *
+ * Exported so an app can name it in its own `@layer` statement and choose
+ * where it sits, without hardcoding the string. Later layers win, so the
+ * order to write depends on which side should — see the customisation guide
+ * rather than copying an example from here.
+ */
+export const COLOPHON_STYLE_LAYER = 'colophon';
+
+/**
+ * Everything is inside `@layer colophon` because this stylesheet arrives LAST.
+ *
+ * It is appended to `<head>` when the first Colophon component mounts, which
+ * for a lazily-loaded route is after the app's own stylesheets — so on a
+ * specificity tie, order decided it and Colophon won. That is backwards for a
+ * library: the app should win by default. Layered rules lose to every
+ * unlayered rule regardless of specificity or order, so `.my-app p` and even
+ * a bare `p` now beat `.colophon-markdown p` with nothing to configure.
+ *
+ * The cost is the same rule read the other way: an app with an aggressive
+ * unlayered reset now beats this sheet too. `@layer colophon` in the app's
+ * own CSS, ordered where it wants, is the fix.
+ *
+ * Cascade layers ship everywhere the container queries below already require
+ * (Chrome 99 / Firefox 97 / Safari 15.4, all older than container-query
+ * support), so this adds no browser floor. Container queries and
+ * `prefers-reduced-motion` nest inside a layer unchanged — a layer scopes
+ * the cascade, not matching.
+ */
 export const colophonMarkdownStyles = `
+@layer ${COLOPHON_STYLE_LAYER} {
 .colophon-markdown {
   color: var(--bui-fg-primary);
   font-family: var(--bui-font-regular);
@@ -208,6 +239,7 @@ export const colophonMarkdownStyles = `
 @keyframes colophon-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) {
   .colophon-skeleton { animation: none; }
+}
 }
 `;
 

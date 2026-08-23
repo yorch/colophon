@@ -5,6 +5,7 @@ import { ColophonNav } from './components/ColophonNav';
 import { ColophonToc } from './components/ColophonToc';
 import {
   COLOPHON_STYLE_ELEMENT_ID,
+  COLOPHON_STYLE_LAYER,
   colophonMarkdownStyles,
   ensureColophonStyles,
 } from './styles';
@@ -57,6 +58,31 @@ describe('stylesheet injection', () => {
     expect(
       document.querySelectorAll(`#${COLOPHON_STYLE_ELEMENT_ID}`),
     ).toHaveLength(1);
+  });
+
+  /**
+   * The cascade is not implemented in jsdom, so this can only assert the
+   * text. That an unlayered app rule actually beats a layered Colophon one
+   * has to be seen in a browser — the point of the layer is a cascade
+   * outcome, and there is no cascade here.
+   */
+  it('emits every rule inside the colophon layer', () => {
+    ensureColophonStyles();
+    const css = styleTag()?.textContent ?? '';
+
+    expect(css.trimStart().startsWith(`@layer ${COLOPHON_STYLE_LAYER} {`)).toBe(
+      true,
+    );
+    // Braces balance, so the layer wraps the whole sheet rather than closing
+    // early and leaving the rest unlayered — which would look identical here
+    // and behave differently in a browser.
+    const opened = (css.match(/{/g) ?? []).length;
+    const closed = (css.match(/}/g) ?? []).length;
+    expect(opened).toBe(closed);
+    // The container queries and the reduced-motion rule live inside it. A
+    // layer scopes the cascade, not matching, so nesting changes nothing.
+    expect(css).toContain('@container (min-width: 56rem)');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
   it('carries the rules those components depend on', () => {

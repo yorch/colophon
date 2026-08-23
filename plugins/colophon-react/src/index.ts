@@ -24,26 +24,44 @@ export {
   defaultCodeLanguages,
   defaultColophonComponents,
 } from './defaultComponents';
+export type {
+  ColophonPipeline,
+  ColophonPipelineProviderProps,
+  ColophonPluginList,
+} from './pipeline';
+export {
+  ColophonPipelineProvider,
+  useColophonPipeline,
+} from './pipeline';
 export type { ColophonComponentsProviderProps } from './registry';
 export {
   ColophonComponentsProvider,
   useColophonComponents,
 } from './registry';
+export type { SanitizeSchema } from './sanitizeSchema';
 export { colophonSanitizeSchema } from './sanitizeSchema';
 export {
   COLOPHON_STYLE_ELEMENT_ID,
+  COLOPHON_STYLE_LAYER,
   ensureColophonStyles,
   useColophonStyles,
 } from './styles';
 export type {
+  BlockquoteProps,
   CodeBlockProps,
   CodeProps,
   ColophonComponents,
   HeadingProps,
   ImageProps,
   LinkProps,
+  ListItemProps,
+  ListProps,
+  ParagraphProps,
   ResolvedColophonComponents,
+  TableCellProps,
+  TableHeadProps,
   TableProps,
+  TableRowProps,
 } from './types';
 export type { AnchorScrollOptions } from './useAnchorScroll';
 export { useAnchorScroll } from './useAnchorScroll';

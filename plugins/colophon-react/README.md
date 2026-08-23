@@ -75,15 +75,37 @@ single page still swaps one component. `codeLanguages` merges key by key, so
 registering `plantuml` does not silently unregister the built-in `mermaid`
 handler.
 
-Overridable slots are `code`, `codeBlock`, `link`, `image`, `heading`, `table`
-and `codeLanguages`; `defaultColophonComponents` is exported if you want to
-wrap a default rather than replace it.
+Overridable slots are `code`, `codeBlock`, `link`, `image`, `heading`,
+`paragraph`, `blockquote`, `list`, `listItem`, `table`, `tableHead`,
+`tableRow`, `tableCell` and `codeLanguages` — the rule is that block-level
+constructs get a slot and inline formatting does not.
+`defaultColophonComponents` is exported if you want to wrap a default rather
+than replace it. An unknown key warns in development builds rather than
+sitting there inert.
+
+## Extending the Markdown pipeline
+
+`ColophonPipelineProvider` adds remark or rehype plugins and widens the
+sanitisation schema, installed the same way as the component registry:
+
+```tsx
+<ColophonPipelineProvider remarkPlugins={[remarkAdmonition]} sanitizeSchema={schema}>
+  {children}
+</ColophonPipelineProvider>
+```
+
+Remark plugins run before sanitisation, so a plugin that emits new elements
+needs `sanitizeSchema` widened to match or its output is stripped. Naming
+`rehype-sanitize` or `rehype-slug` in `rehypePlugins` is rejected: `unified`
+matches plugins by identity, so it would reconfigure the built-in pass rather
+than add one.
 
 ## Also exported
 
 `ColophonNav`, `ColophonToc`, `ColophonPageHeader` and `ColophonSearchResults`,
 which are the rest of a documentation page; `MermaidDiagram`;
 `colophonSanitizeSchema`, the rehype-sanitize schema the renderer runs with;
+`COLOPHON_STYLE_LAYER`, the cascade layer its stylesheet is emitted into;
 and `useAnchorScroll` / `useContainerWidth`.
 
 ## Status

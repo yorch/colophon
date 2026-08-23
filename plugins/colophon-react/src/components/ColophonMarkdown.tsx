@@ -1,23 +1,60 @@
 import { stripFrontmatter } from '@brnby/colophon-common';
-import type { ComponentProps, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Children, isValidElement, useMemo } from 'react';
 import type { Components } from 'react-markdown';
 import Markdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeSlug from 'rehype-slug';
 import remarkGfm from 'remark-gfm';
+import type { ColophonPluginList } from '../pipeline';
+import { assertNoReservedPlugins, useColophonPipeline } from '../pipeline';
 import { useColophonComponents } from '../registry';
+import type { SanitizeSchema } from '../sanitizeSchema';
 import { colophonSanitizeSchema } from '../sanitizeSchema';
 import { useColophonStyles } from '../styles';
-import type { CodeBlockProps } from '../types';
-
-type MarkdownProps = ComponentProps<typeof Markdown>;
+import type { CodeBlockProps, TableCellProps } from '../types';
 
 export interface ColophonMarkdownProps {
   /** Markdown source, as published. */
   content: string;
   /** Added to the wrapper, for consumers that want their own prose rules. */
   className?: string;
+  /**
+   * Remark plugins, added after `remark-gfm` and after any a
+   * `ColophonPipelineProvider` supplies.
+   *
+   * These run on the Markdown syntax tree, so anything they emit still passes
+   * through the sanitiser afterwards. That is the good case and the trap in
+   * one: a plugin that emits an element or attribute the schema does not
+   * allow gets it stripped, and the page renders as if the plugin were never
+   * installed. Pair such a plugin with a widened {@link sanitizeSchema}.
+   */
+  remarkPlugins?: ColophonPluginList;
+  /**
+   * Rehype plugins, added after `rehype-sanitize` and `rehype-slug`.
+   *
+   * They run AFTER sanitisation and their output is not checked — which is
+   * what a syntax highlighter or an id-decorator needs, and is only safe
+   * because these are the adopter's own code rather than page content.
+   *
+   * There is deliberately no way to run a plugin BEFORE the sanitiser, and
+   * naming `rehype-sanitize` or `rehype-slug` here is rejected rather than
+   * quietly reconfiguring the built-in pass — see `assertNoReservedPlugins`.
+   * That ordering is also why `rehype-raw` is inert here rather than
+   * dangerous: the sanitiser has already dropped every `raw` node before an
+   * appended plugin sees the tree.
+   */
+  rehypePlugins?: ColophonPluginList;
+  /**
+   * The `rehype-sanitize` schema, defaulting to `colophonSanitizeSchema`.
+   *
+   * Extend the default rather than replacing it — page bodies come from
+   * arbitrary repositories, so this is a security boundary, and the shipped
+   * schema is GitHub's allow-list plus the three things the renderer needs.
+   * Widening it is how a remark plugin's new elements survive to the DOM, and
+   * it is the ONLY supported route to the sanitiser's configuration.
+   */
+  sanitizeSchema?: SanitizeSchema;
 }
 
 /**
@@ -31,8 +68,12 @@ export interface ColophonMarkdownProps {
 export function ColophonMarkdown({
   content,
   className,
+  remarkPlugins,
+  rehypePlugins,
+  sanitizeSchema,
 }: ColophonMarkdownProps) {
   const overrides = useColophonComponents();
+  const ambient = useColophonPipeline();
 
   // Pages are stored whole, frontmatter included, so the renderer strips it
   // for the same reason the publisher and the chunker do — and using the
@@ -52,7 +93,14 @@ export function ColophonMarkdown({
       link: LinkComponent,
       image: ImageComponent,
       heading: Heading,
+      paragraph: Paragraph,
+      blockquote: Blockquote,
+      list: ListComponent,
+      listItem: ListItem,
       table: TableComponent,
+      tableHead: TableHead,
+      tableRow: TableRow,
+      tableCell: TableCell,
       codeLanguages,
     } = overrides;
 
@@ -111,8 +159,53 @@ export function ColophonMarkdown({
       img({ src, alt, title }) {
         return <ImageComponent src={src} alt={alt} title={title} />;
       },
+      p({ children }) {
+        return <Paragraph>{children}</Paragraph>;
+      },
+      blockquote({ children }) {
+        return <Blockquote>{children}</Blockquote>;
+      },
+      ul({ children }) {
+        return <ListComponent ordered={false}>{children}</ListComponent>;
+      },
+      ol({ start, children }) {
+        // `start` is absent unless the list is numbered from something other
+        // than 1, and null-vs-undefined is react-markdown's, not ours.
+        return (
+          <ListComponent ordered start={start ?? undefined}>
+            {children}
+          </ListComponent>
+        );
+      },
+      li({ id, className: itemClassName, children }) {
+        return (
+          <ListItem id={id} className={itemClassName}>
+            {children}
+          </ListItem>
+        );
+      },
       table({ children }) {
         return <TableComponent>{children}</TableComponent>;
+      },
+      thead({ children }) {
+        return <TableHead>{children}</TableHead>;
+      },
+      tr({ children }) {
+        return <TableRow>{children}</TableRow>;
+      },
+      th({ style, children }) {
+        return (
+          <TableCell header align={readAlign(style)}>
+            {children}
+          </TableCell>
+        );
+      },
+      td({ style, children }) {
+        return (
+          <TableCell header={false} align={readAlign(style)}>
+            {children}
+          </TableCell>
+        );
       },
       h1: renderHeading(1),
       h2: renderHeading(2),
@@ -123,6 +216,40 @@ export function ColophonMarkdown({
     };
   }, [overrides]);
 
+  // A provider's additions come first, then this instance's props, so a
+  // page-level plugin composes onto an app-wide one rather than shadowing it.
+  const remark = useMemo<ColophonPluginList>(
+    () => [
+      ...REMARK_PLUGINS,
+      ...(ambient.remarkPlugins ?? []),
+      ...(remarkPlugins ?? []),
+    ],
+    [ambient.remarkPlugins, remarkPlugins],
+  );
+
+  const schema =
+    sanitizeSchema ?? ambient.sanitizeSchema ?? colophonSanitizeSchema;
+
+  /**
+   * Sanitisation runs BEFORE slugging on purpose.
+   *
+   * The sanitiser treats `id` as clobberable and rewrites it to
+   * `user-content-<id>`. Slugging afterwards leaves heading ids untouched, so
+   * they match the `anchor` values the manifest recorded and
+   * table-of-contents links resolve.
+   *
+   * Caller plugins are added after that pair, but "after" is not the same as
+   * "cannot reach it": `unified.use()` matches by attacher identity, so a
+   * caller naming one of the two rewrites its entry in place instead of
+   * appending. `assertNoReservedPlugins` is what actually keeps the pair
+   * intact — position alone does not.
+   */
+  const rehype = useMemo<ColophonPluginList>(() => {
+    const caller = [...(ambient.rehypePlugins ?? []), ...(rehypePlugins ?? [])];
+    assertNoReservedPlugins(caller);
+    return [[rehypeSanitize, schema], rehypeSlug, ...caller];
+  }, [schema, ambient.rehypePlugins, rehypePlugins]);
+
   return (
     <div
       className={
@@ -130,8 +257,8 @@ export function ColophonMarkdown({
       }
     >
       <Markdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
+        remarkPlugins={remark}
+        rehypePlugins={rehype}
         components={components}
       >
         {body}
@@ -140,20 +267,20 @@ export function ColophonMarkdown({
   );
 }
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS: ColophonPluginList = [remarkGfm];
+
+const ALIGNMENTS = ['left', 'center', 'right'] as const;
 
 /**
- * Sanitisation runs BEFORE slugging on purpose.
+ * Recovers GFM column alignment from the cell's inline style.
  *
- * The sanitiser treats `id` as clobberable and rewrites it to
- * `user-content-<id>`. Slugging afterwards leaves heading ids untouched, so
- * they match the `anchor` values the manifest recorded and table-of-contents
- * links resolve.
+ * remark-rehype records it as an `align` attribute, but react-markdown hands
+ * components the React form of the properties, where that has already become
+ * `style={{ textAlign }}` — so the attribute name never appears in props.
  */
-const REHYPE_PLUGINS: MarkdownProps['rehypePlugins'] = [
-  [rehypeSanitize, colophonSanitizeSchema],
-  rehypeSlug,
-];
+function readAlign(style: CSSProperties | undefined): TableCellProps['align'] {
+  return ALIGNMENTS.find(alignment => alignment === style?.textAlign);
+}
 
 /** Pulls language and source out of the `<code>` element inside a `<pre>`. */
 function readCodeBlock(children: ReactNode): CodeBlockProps | undefined {

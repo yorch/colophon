@@ -8,8 +8,14 @@ import { defaultSchema } from 'rehype-sanitize';
  * untrusted input. This schema is deliberately an EXTENSION of GitHub's
  * default allow-list rather than a replacement: it adds the three things the
  * renderer genuinely needs and nothing else. If a future feature needs another
- * tag or attribute, add it here — do not reach for `rehype-raw`, which would
- * reintroduce the raw HTML that the markdown pipeline otherwise drops.
+ * tag or attribute, add it here.
+ *
+ * Not `rehype-raw`: react-markdown does put a page's raw HTML into the tree
+ * as `raw` nodes, and this pass is what removes them. An adopter's rehype
+ * plugins run afterwards, so a `rehype-raw` among them finds nothing to
+ * expand — inert because of the ordering, not because raw HTML never arrives.
+ * Moving anything ahead of this pass is what would reopen it, which is why
+ * nothing is allowed to.
  */
 
 const attributes = defaultSchema.attributes ?? {};
