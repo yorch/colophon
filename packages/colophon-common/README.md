@@ -19,8 +19,8 @@ Installing the CLI or either plugin already brings it in.
 yarn add @brnby/colophon-common
 ```
 
-Releases go out under both the `latest` and `next` dist-tags; both currently
-point at `0.1.0`.
+Releases go out under the `latest` dist-tag, so a plain install gets the
+current version.
 
 ## Usage
 
