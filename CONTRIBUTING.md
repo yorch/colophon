@@ -92,11 +92,26 @@ re-check the input names, because GitHub Actions **ignores unknown inputs
 silently** — every input was renamed between v1 and v2.
 
 That step works out what to release from the repository, not from the
-changesets action: the version comes from the manifests, the list of packages
-from the `fixed` group in `.changeset/config.json`, and whether the release has
-already been made from whether the tag exists. So a push to main that does not
-bump the version is a no-op, and re-running a release that already tagged is
-safe.
+changesets action: the version comes from the manifests **on the commit being
+released**, the list of packages from the `fixed` group in
+`.changeset/config.json`, and whether the release has already been made from
+whether the tag exists. So a push to main that does not bump the version is a
+no-op, and re-running a release that already tagged is safe.
+
+"On the commit" is load-bearing, and reading the working tree instead is how
+`v0.1.2` came to exist as a tag and a GitHub release with nothing behind it on
+npm. `changesets/action` runs the version script — `changeset version` — in
+this checkout to build the "chore: version packages" pull request, and the
+bumped manifests stay there. A step that reads them off disk on a push that
+merely *opens* that pull request sees a version nothing has published, does
+not find its tag, and releases it. That is exactly what happened on the
+feature merge that opened the 0.1.2 pull request; the pull request later
+absorbed a minor changeset and merged as 0.2.0, so 0.1.2 will never exist. The
+same slip put `v0.2.0`'s tag on a feature merge rather than on the commit that
+published it. The versions are now read with `git show "$GITHUB_SHA:…"`, from
+the same commit the tag is pinned to. The `v0.1.2` and `v0.2.0` refs are
+left as they are — repairing a published tag is a history rewrite, and the
+record of what went wrong is worth more than a tidy tag list.
 
 It used to be gated on the action's `published` output instead, and that is how
 0.1.1 reached npm with no tag and no release, in a run that reported success.
@@ -121,18 +136,22 @@ pointed, which is the part that let it run that long.
 
 The **Check dist-tags** step is that opinion. After the release, for every
 package in the fixed group, it asks the registry what `latest` resolves to and
-fails the run when that is not the version in the manifests, naming each
-package, both versions and the `npm dist-tag add` needed to repair it. It
-polls rather than asking once, because a dist-tag is not visible the instant
-the publish that moved it returns.
+fails the run when that is not the version just released, naming each package,
+both versions and the `npm dist-tag add` needed to repair it. It polls rather
+than asking once, because a dist-tag is not visible the instant the publish
+that moved it returns.
 
-It is deliberately not gated on this run having published. A version the
-registry has never seen is skipped — that is a push to main whose version is
-not released yet, not a failure — so the check is cheap enough to run on every
-push, and running it on every push is what turns a dist-tag that has silently
-stopped moving into a failure on the next push rather than four releases
-later. The exception is a version this run released: then the registry has to
-have it, and its absence is the failure.
+It runs only when the step above created the release, which — now that the
+version is read from the commit — is the same question as whether this run
+published: a push that releases nothing finds its tag already there and skips
+both steps. Asking the registry on every push would also catch a dist-tag
+moved out of band, but it would hold main red for a stale `latest` that only a
+maintainer with npm 2FA can repair, and a main that stays red for something
+the run did not do teaches people to ignore red.
+
+It also catches a release with no publish behind it, because a version that
+never reached the registry cannot be what `latest` resolves to. That is the
+second line behind the manifest fix above, not a replacement for it.
 
 Moving `latest` back onto a version already published is a maintainer's job,
 not CI's — `npm dist-tag` needs a credential this repository deliberately does

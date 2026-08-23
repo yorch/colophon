@@ -114,6 +114,16 @@ jobs:
           # request is what bumps them, and this job is what publishes them.
           # The fixed group in the changesets config is the list of packages
           # that share it, so it stays the single source of truth for the five.
+          #
+          # Read out of the commit, not the working tree, and out of the same
+          # commit the tag below is pinned to. `changesets/action` runs
+          # `changeset version` in this checkout to build the version pull
+          # request, so on a push that merely opens or updates that pull
+          # request the manifests on disk carry a version nothing has
+          # published. Reading those is how v0.1.2 came to exist as a tag and
+          # a GitHub release with nothing behind it on npm, tagged on a
+          # feature merge, and how v0.2.0's tag landed on a feature merge
+          # rather than on the commit that published it.
           group=$(jq -c '.fixed[0]' .changeset/config.json)
           packages=$(
             yarn workspaces list --json |
@@ -121,7 +131,10 @@ jobs:
                 select(.name as $n | $group | index($n)) | .location
               ' |
               sort |
-              xargs -I{} jq -r '"\(.name) \(.version)"' {}/package.json
+              while read -r location; do
+                git show "$GITHUB_SHA:$location/package.json" |
+                  jq -r '"\(.name) \(.version)"'
+              done
           )
           versions=$(awk '{ print $2 }' <<< "$packages" | sort -u)
 
@@ -187,47 +200,33 @@ jobs:
       # `npm install @brnby/plugin-colophon` still resolving to the first
       # release. A publish that lands on the wrong dist-tag is invisible from
       # inside the pipeline unless something asks the registry.
+      #
+      # Gated on the step above having created the release, which is the same
+      # question as whether this run published: the version comes from the
+      # commit, so a push that releases nothing finds its tag already there
+      # and this is skipped. Asking the registry on every push would catch a
+      # dist-tag moved out of band too, but it would also hold main red for a
+      # stale `latest` that only a human with npm 2FA can repair — and a main
+      # that stays red for something the run did not do teaches people to
+      # ignore red.
       - name: Check dist-tags
+        if: steps.release.outputs.released == 'true'
         env:
-          # Both derived from the repository by the step above: the fixed
-          # group's packages with the version the manifests carry, and whether
-          # this run is the one that released it.
+          # The fixed group with the version this run released, from the same
+          # repo-derived list the step above tagged.
           PACKAGES: ${{ steps.release.outputs.packages }}
-          RELEASED: ${{ steps.release.outputs.released }}
         run: |
           set -euo pipefail
-
-          # Deliberately not gated on this run having published. A version
-          # that is not on the registry at all is skipped — that is a push to
-          # main whose version has not been released yet, not a failure — so
-          # the check is safe to run every time, and running it every time is
-          # what turns a dist-tag that has silently stopped moving into a
-          # failure on the next push rather than four releases later. The one
-          # case where absence *is* the failure is a version this run released:
-          # then the registry has to have it.
-          pending=$(
-            while read -r name version; do
-              if [ "$RELEASED" = 'true' ] ||
-                 npm view "$name@$version" version --prefer-online >/dev/null 2>&1; then
-                printf '%s %s\n' "$name" "$version"
-              else
-                echo "$name@$version is not published; not checking its dist-tag." >&2
-              fi
-            done <<< "$PACKAGES"
-          )
-
-          if [ -z "$pending" ]; then
-            echo 'Nothing released to check.'
-            exit 0
-          fi
 
           # npm's registry reads are cached, so `latest` can still answer with
           # the previous version for a few seconds after the publish that moved
           # it — long enough for a single check here to fail a release that was
           # in fact correct. Poll instead, with `--prefer-online` so each
-          # attempt revalidates rather than re-reading the same cached answer.
+          # attempt revalidates rather than re-reading the same cached answer,
+          # and only re-ask about the packages that have not settled.
           attempts=8
           delay=15
+          pending=$PACKAGES
           for attempt in $(seq "$attempts"); do
             pending=$(
               while read -r name version _; do
