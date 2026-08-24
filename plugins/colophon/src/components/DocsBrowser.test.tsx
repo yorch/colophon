@@ -1,3 +1,6 @@
+import { ConfigReader } from '@backstage/config';
+import { ScmIntegrations } from '@backstage/integration';
+import { scmIntegrationsApiRef } from '@backstage/integration-react';
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
 import type { Manifest, Page } from '@brnby/colophon-common';
@@ -5,6 +8,16 @@ import { screen, waitFor } from '@testing-library/react';
 import type { ColophonApi, ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
 import { DocsBrowser } from './DocsBrowser';
+
+/**
+ * A real registry rather than a stub, so the header renders the URL the
+ * integration actually derives. The fixture manifest points at example.com,
+ * which is deliberately NOT configured here — every assertion below predates
+ * source links and must keep passing with no link rendered at all.
+ */
+const scm = ScmIntegrations.fromConfig(
+  new ConfigReader({ integrations: { github: [{ host: 'github.com' }] } }),
+);
 
 function page(overrides: Partial<Page> = {}): Page {
   return {
@@ -73,7 +86,12 @@ function apiStub(overrides: Partial<ColophonApi> = {}): ColophonApi {
 
 async function renderWith(api: ColophonApi, bundleId = 'github.com/brnby/api') {
   return renderInTestApp(
-    <TestApiProvider apis={[[colophonApiRef, api]]}>
+    <TestApiProvider
+      apis={[
+        [colophonApiRef, api],
+        [scmIntegrationsApiRef, scm],
+      ]}
+    >
       <DocsBrowser bundleId={bundleId} />
     </TestApiProvider>,
   );
@@ -116,7 +134,12 @@ describe('DocsBrowser', () => {
   it('says plainly when nothing is published under a subpath', async () => {
     const api = apiStub();
     await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, api]]}>
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, api],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
         <DocsBrowser
           bundleId="github.com/brnby/platform"
           subpath="services/billing"
@@ -189,7 +212,12 @@ describe('DocsBrowser', () => {
       ]),
     });
     await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, api]]}>
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, api],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
         <DocsBrowser
           bundleId="github.com/brnby/api"
           onChannelChange={jest.fn()}
@@ -202,5 +230,60 @@ describe('DocsBrowser', () => {
       ).toBeInTheDocument(),
     );
     expect(await screen.findByText('Version')).toBeInTheDocument();
+  });
+});
+
+/**
+ * jsdom has no layout and no navigation, so these assert the ANCHOR — that
+ * the right href reaches the DOM, and that the absent case renders nothing at
+ * all rather than an empty or broken one. Whether the link LANDS on the file
+ * is a browser question, checked by hand against a running app.
+ */
+describe('DocsBrowser source links', () => {
+  it('offers view and edit links for a bundle with a resolvable source', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            source: {
+              type: 'git',
+              url: 'https://github.com/brnby/api',
+              ref: 'main',
+              commit: 'c',
+              path: 'docs',
+            },
+            pages: [page({ path: 'guides/deploy.md', slug: 'guides/deploy' })],
+            nav: [{ title: 'Deploy', slug: 'guides/deploy' }],
+          }),
+        }),
+      ),
+    });
+    await renderWith(api);
+
+    expect(
+      await screen.findByRole('link', { name: 'Edit this page' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/brnby/api/edit/main/docs/guides/deploy.md',
+    );
+    expect(screen.getByRole('link', { name: 'View source' })).toHaveAttribute(
+      'href',
+      'https://github.com/brnby/api/tree/main/docs/guides/deploy.md',
+    );
+  });
+
+  // Every bundle published before this shipped looks like the default
+  // fixture: a host with no integration, and nothing to link to.
+  it('renders no link at all when the host has no integration', async () => {
+    const api = apiStub();
+    await renderWith(api);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Payments API' }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('link', { name: 'Edit this page' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View source' })).toBeNull();
   });
 });

@@ -46,7 +46,7 @@ export const colophonPlugin = createBackendPlugin({
         catalog,
         permissions,
       }) {
-        const { appBaseUrl, appPath, entityLinkSchedule } =
+        const { annotation, appBaseUrl, appPath, entityLinkSchedule } =
           readColophonConfig(config);
         const colophon = await createColophonService({
           config,
@@ -91,6 +91,7 @@ export const colophonPlugin = createBackendPlugin({
                 auth,
                 db: colophon.db,
                 logger,
+                annotation,
                 // Without this the declared timeout only releases the task
                 // ticket: the in-flight catalog read keeps going, another
                 // worker can claim the task, and both eventually write the

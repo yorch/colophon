@@ -1,13 +1,15 @@
+import { configApiRef, useApi } from '@backstage/core-plugin-api';
 import { useEntity } from '@backstage/plugin-catalog-react';
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { readBundleRef } from '../annotation';
+import { readAnnotationKey, readBundleRef } from '../annotation';
 import { DocsBrowser } from './DocsBrowser';
 import { StateMessage } from './StateMessage';
 
 /** The documentation tab on a catalog entity. */
 export function EntityColophonContent() {
   const { entity } = useEntity();
+  const annotationKey = readAnnotationKey(useApi(configApiRef));
 
   // The channel comes from the URL, not from component state. The backend
   // puts it there when it builds a citable link, including for the entity
@@ -26,12 +28,15 @@ export function EntityColophonContent() {
     [searchParams, setSearchParams],
   );
 
-  const ref = readBundleRef(entity);
+  const ref = readBundleRef(entity, annotationKey);
   if (!ref) {
     return (
       <StateMessage
         title="No documentation configured"
-        detail="Add the brnby.io/colophon annotation to this entity to link it to a documentation bundle."
+        // Names the CONFIGURED key, not the default. An app that renamed the
+        // annotation would otherwise tell the reader to add one that nothing
+        // reads, which is a worse answer than no answer.
+        detail={`Add the ${annotationKey} annotation to this entity to link it to a documentation bundle.`}
       />
     );
   }

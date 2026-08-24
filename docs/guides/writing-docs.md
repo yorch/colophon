@@ -64,6 +64,33 @@ status: current       # current | draft | deprecated
 
 Only `title` is strictly required, and even that falls back to the first H1.
 
+### Your own keys are kept
+
+Anything Colophon does not define is carried through unchanged, so an
+organisation's own vocabulary survives publishing:
+
+```yaml
+---
+title: Rotating database credentials
+owner: platform-team
+reviewed: 2026-08-01
+jira: PLAT-482
+---
+```
+
+`owner`, `reviewed` and `jira` arrive intact on the page's `metadata` — in
+the manifest, in the API, and in what the `colophon:get-page` MCP tool hands
+an agent, which is what lets an agent answer "who owns this page". Values
+keep their YAML shape: lists stay lists, nested maps stay nested.
+
+The six keys Colophon reads — `title`, `description`, `type`, `status`,
+`tags`, `nav_order` — are **not** duplicated into it, so there is exactly one
+place to look for each.
+
+This is a passthrough and nothing else. Custom keys are not indexed and
+cannot be searched or filtered on; `colophon:search` still narrows by `tags`
+and `type` only.
+
 ## Two fields that carry more weight than they look
 
 **`description`** is what an agent sees in a search result before deciding

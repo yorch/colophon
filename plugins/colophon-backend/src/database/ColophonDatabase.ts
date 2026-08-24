@@ -62,6 +62,7 @@ interface PageRow {
   tags_text: string;
   content_hash: string;
   nav_order: number | null;
+  metadata: string | null;
 }
 
 interface ChunkRow {
@@ -129,7 +130,30 @@ function toPage(row: PageRow): PageRecord {
     tags: JSON.parse(row.tags) as string[],
     contentHash: row.content_hash,
     navOrder: row.nav_order ?? undefined,
+    // Null for every row written before the column existed, and for every
+    // page that simply has no custom frontmatter — the two are the same
+    // answer to the reader, so they are stored the same way.
+    metadata: row.metadata === null ? undefined : parseMetadata(row.metadata),
   };
+}
+
+/**
+ * Tolerant on the way out, because the alternative is worse.
+ *
+ * This column is written from a manifest that zod already validated, so
+ * unparseable content means the row was corrupted or hand-edited. Throwing
+ * here would take out the whole page — including its Markdown, which is the
+ * part the reader actually came for — over a field nothing indexes.
+ */
+function parseMetadata(raw: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function toChunk(row: ChunkRow): ChunkRecord {
@@ -301,6 +325,7 @@ export class ColophonDatabase {
         tags_text: tagsText(page.tags),
         content_hash: page.contentHash,
         nav_order: page.navOrder ?? null,
+        metadata: page.metadata ? JSON.stringify(page.metadata) : null,
       }));
       await trx.batchInsert('colophon_pages', rows, 200);
     });

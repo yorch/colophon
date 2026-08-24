@@ -74,6 +74,7 @@ export async function build(options: PublishOptions): Promise<BuildResult> {
     status: page.status,
     tags: page.tags,
     navOrder: page.navOrder,
+    metadata: page.metadata,
     headings: page.headings,
     contentHash: sha256(page.rawBytes),
     size: page.rawBytes.byteLength,

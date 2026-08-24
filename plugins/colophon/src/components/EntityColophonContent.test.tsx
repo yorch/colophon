@@ -1,4 +1,7 @@
 import type { Entity } from '@backstage/catalog-model';
+import { ConfigReader } from '@backstage/config';
+import { ScmIntegrations } from '@backstage/integration';
+import { scmIntegrationsApiRef } from '@backstage/integration-react';
 import { EntityProvider } from '@backstage/plugin-catalog-react';
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
@@ -6,6 +9,11 @@ import { screen, waitFor } from '@testing-library/react';
 import type { ColophonApi } from '../api';
 import { colophonApiRef } from '../api';
 import { EntityColophonContent } from './EntityColophonContent';
+
+/** Configured for github.com only; the fixture entity's bundle is elsewhere. */
+const scm = ScmIntegrations.fromConfig(
+  new ConfigReader({ integrations: { github: [{ host: 'github.com' }] } }),
+);
 
 function entity(annotation?: string): Entity {
   return {
@@ -37,7 +45,12 @@ function apiStub(overrides: Partial<ColophonApi> = {}): ColophonApi {
 describe('EntityColophonContent', () => {
   it('asks the reader to add the annotation when none is set', async () => {
     await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, apiStub()]]}>
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, apiStub()],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
         <EntityProvider entity={entity()}>
           <EntityColophonContent />
         </EntityProvider>
@@ -52,7 +65,12 @@ describe('EntityColophonContent', () => {
       () => new Promise(() => {}),
     );
     await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, apiStub({ getManifest })]]}>
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, apiStub({ getManifest })],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
         <EntityProvider entity={entity('github.com/brnby/api')}>
           <EntityColophonContent />
         </EntityProvider>
@@ -69,7 +87,12 @@ describe('EntityColophonContent', () => {
 
   it('treats a malformed annotation the same as a missing one', async () => {
     await renderInTestApp(
-      <TestApiProvider apis={[[colophonApiRef, apiStub()]]}>
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, apiStub()],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
         <EntityProvider entity={entity('GitHub.com/UPPER')}>
           <EntityColophonContent />
         </EntityProvider>

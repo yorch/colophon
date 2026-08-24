@@ -60,6 +60,15 @@ export function registerGetPageAction(deps: ColophonActionDeps): void {
               '"draft" and "deprecated" pages must be flagged to the user.',
             ),
           tags: z.array(z.string()),
+          metadata: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe(
+              'Frontmatter keys this organisation defines that Colophon does ' +
+                'not, e.g. "owner" or "reviewed". Absent when the page has ' +
+                'none. Vocabulary varies per organisation, so treat the keys ' +
+                'as data rather than assuming any particular one exists.',
+            ),
           markdown: z.string().describe('The page body, as authored.'),
           partial: z
             .boolean()
@@ -114,6 +123,7 @@ export function registerGetPageAction(deps: ColophonActionDeps): void {
           type: resolved.page.type,
           status: resolved.page.status,
           tags: resolved.page.tags,
+          metadata: resolved.page.metadata,
           markdown,
           partial,
           url: pageUrl({

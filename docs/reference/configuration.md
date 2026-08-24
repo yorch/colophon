@@ -65,6 +65,64 @@ Entity-scoped links are built from the catalog's own route
 Moving the catalog plugin or the documentation tab is a separate problem that
 `appPath` does not solve.
 
+## The catalog annotation
+
+Which annotation links a catalog entity to a documentation bundle.
+
+```yaml
+colophon:
+  annotation: brnby.io/colophon
+```
+
+| Key | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `annotation` | no | `brnby.io/colophon` | Read by the backend AND the frontend; both must agree |
+
+Set this if your organisation namespaces its annotations and renaming them
+across the whole catalog is not on the table:
+
+```yaml
+colophon:
+  annotation: acme.example.com/docs
+```
+
+```yaml
+# catalog-info.yaml
+metadata:
+  annotations:
+    acme.example.com/docs: github.com/acme/payments-api
+```
+
+The value's own grammar is unchanged — `<bundleId>` or
+`<bundleId>#<subpath>`. Only the key moves.
+
+### The docs tab needs the filter moved too
+
+The backend reads this key to build its entity-to-bundle table, and the
+documentation tab reads it to find the bundle for the entity it is rendering.
+Both follow the config. What does **not** follow it is the predicate that
+decides whether the tab appears at all: that is the `filter` of an entity
+content extension, which the frontend system evaluates without access to
+config. Rename the annotation and the tab keeps testing for the old key, so
+an annotated entity gets no tab and nothing says why.
+
+Override the filter alongside the key:
+
+```yaml
+app:
+  extensions:
+    - entity-content:colophon/colophon:
+        config:
+          filter:
+            metadata.annotations.acme.example.com/docs: { $exists: true }
+```
+
+An entity predicate object, not the older string expression — the string form
+still works and logs a deprecation warning naming the extension.
+
+Both halves, or neither — a rename that moves only one of them is a
+half-working system rather than a broken one, which is harder to notice.
+
 ## Storage
 
 Where published bundles are read from. The backend needs read-only access;

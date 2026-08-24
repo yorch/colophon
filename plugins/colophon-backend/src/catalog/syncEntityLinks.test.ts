@@ -67,6 +67,7 @@ describe('entity link sync', () => {
       db,
       auth,
       logger: mockServices.logger.mock(),
+      annotation: COLOPHON_ANNOTATION,
     });
 
     expect(result).toEqual({ linked: 2, skipped: 0 });
@@ -98,6 +99,7 @@ describe('entity link sync', () => {
       db,
       auth,
       logger: mockServices.logger.mock(),
+      annotation: COLOPHON_ANNOTATION,
     });
 
     expect(result).toEqual({ linked: 1, skipped: 1 });
@@ -117,6 +119,7 @@ describe('entity link sync', () => {
       db,
       auth,
       logger: mockServices.logger.mock(),
+      annotation: COLOPHON_ANNOTATION,
     });
 
     expect(result).toEqual({ linked: 0, skipped: 0 });
@@ -133,7 +136,13 @@ describe('entity link sync', () => {
     const { catalog } = catalogStub({ annotated: [], total: 0 });
     const logger = mockServices.logger.mock();
 
-    const result = await syncEntityLinks({ catalog, db, auth, logger });
+    const result = await syncEntityLinks({
+      catalog,
+      db,
+      auth,
+      logger,
+      annotation: COLOPHON_ANNOTATION,
+    });
 
     expect(result).toEqual({ linked: 0, skipped: 0 });
     expect(db.replaceEntityLinks).not.toHaveBeenCalled();
@@ -154,10 +163,72 @@ describe('entity link sync', () => {
       db,
       auth,
       logger: mockServices.logger.mock(),
+      annotation: COLOPHON_ANNOTATION,
       abortSignal: AbortSignal.abort(),
     });
 
     expect(result).toEqual({ linked: 0, skipped: 0 });
     expect(db.replaceEntityLinks).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Both halves of the rename have to move together. Filtering the catalog on
+   * the configured key while still READING the default off each entity would
+   * return the right entities and link none of them — a sync that reports
+   * "0 linked" against a catalog full of correctly annotated components.
+   */
+  it('indexes a renamed annotation, filtering and reading the same key', async () => {
+    const db = dbStub();
+    const custom = 'acme.example.com/docs';
+    const { catalog, calls } = catalogStub({
+      annotated: [
+        {
+          apiVersion: 'backstage.io/v1alpha1',
+          kind: 'Component',
+          metadata: {
+            name: 'web',
+            namespace: 'default',
+            annotations: { [custom]: 'example.com/repo' },
+          },
+        },
+      ],
+    });
+
+    const result = await syncEntityLinks({
+      catalog,
+      db,
+      auth,
+      logger: mockServices.logger.mock(),
+      annotation: custom,
+    });
+
+    expect(calls[0]).toMatchObject({
+      filter: { [`metadata.annotations.${custom}`]: expect.anything() },
+    });
+    expect(result).toEqual({ linked: 1, skipped: 0 });
+    expect(db.replaceEntityLinks).toHaveBeenCalledWith([
+      {
+        entityRef: 'component:default/web',
+        bundleId: 'example.com/repo',
+        subpath: undefined,
+      },
+    ]);
+  });
+
+  it('ignores the default key once another one is configured', async () => {
+    const db = dbStub();
+    const { catalog } = catalogStub({
+      annotated: [entity('web', 'example.com/repo')],
+    });
+
+    const result = await syncEntityLinks({
+      catalog,
+      db,
+      auth,
+      logger: mockServices.logger.mock(),
+      annotation: 'acme.example.com/docs',
+    });
+
+    expect(result).toEqual({ linked: 0, skipped: 0 });
   });
 });

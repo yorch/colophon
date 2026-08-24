@@ -1,4 +1,5 @@
 import { mockServices } from '@backstage/backend-test-utils';
+import { COLOPHON_ANNOTATION } from '@brnby/colophon-common';
 import { DEFAULT_ENTITY_LINK_SCHEDULE, readColophonConfig } from './config';
 
 const read = (colophon: object) =>
@@ -77,5 +78,29 @@ describe('readColophonConfig appPath', () => {
 
   it('renders a root mount as the empty string, so links stay single-slashed', () => {
     expect(read({ appPath: '/' }).appPath).toBe('');
+  });
+});
+
+/**
+ * A key declared in the schema but never read is the failure this project has
+ * already paid for once — `storage.local.directory` was documented, accepted,
+ * and read under a different name, so publishes succeeded and reads 404'd
+ * with nothing logged. These assert the read site, not the declaration.
+ */
+describe('readColophonConfig annotation', () => {
+  it('defaults to the contract constant', () => {
+    expect(read({}).annotation).toBe(COLOPHON_ANNOTATION);
+  });
+
+  it('returns the configured key', () => {
+    expect(read({ annotation: 'acme.example.com/docs' }).annotation).toBe(
+      'acme.example.com/docs',
+    );
+  });
+
+  it('treats a blank key as unset rather than as a key', () => {
+    // An annotation named "" or "   " matches no entity, so honouring it
+    // would silently index nothing — the same shape of failure as above.
+    expect(read({ annotation: '   ' }).annotation).toBe(COLOPHON_ANNOTATION);
   });
 });

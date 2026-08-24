@@ -33,6 +33,21 @@ export interface Config {
     appPath?: string;
 
     /**
+     * The catalog annotation that links an entity to a documentation bundle.
+     *
+     * Organisations that namespace their annotations cannot adopt a hardcoded
+     * key without renaming annotations across their whole catalog, so this is
+     * the one string both halves have to agree on. Read by the frontend too —
+     * the entity tab has to look up the same key the backend indexed, and a
+     * disagreement shows up as a tab that renders "no documentation
+     * configured" on an entity that plainly has some.
+     *
+     * @visibility frontend
+     * @default "brnby.io/colophon"
+     */
+    annotation?: string;
+
+    /**
      * Where published bundles are read from. Omitted entirely, this is a
      * `local` store under ./colophon-storage — a development default, not a
      * deployment one.

@@ -1,4 +1,5 @@
 import { useApi } from '@backstage/core-plugin-api';
+import { scmIntegrationsApiRef } from '@backstage/integration-react';
 import { entrySlug, scopeNavigation } from '@brnby/colophon-common';
 import {
   ColophonNav,
@@ -13,6 +14,7 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import { isWithinSubpath } from '../annotation';
 import type { ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
+import { pageSourceLinks } from '../sourceLinks';
 import { ChannelPicker } from './ChannelPicker';
 import { PageMarkdown } from './markdownComponents';
 import { StateMessage } from './StateMessage';
@@ -111,6 +113,21 @@ export function DocsBrowser({
   const activeSlug =
     slug ?? (pages.some(page => page.slug === entry) ? entry : pages[0]?.slug);
   const page = pages.find(candidate => candidate.slug === activeSlug);
+
+  // Undefined for every bundle published without `--source-*`, and for any
+  // host this app has no SCM integration for, in which case the header simply
+  // renders no link. That is the common case on first upgrade, so it has to
+  // be the quiet one.
+  const scm = useApi(scmIntegrationsApiRef);
+  const sourceLinks = useMemo(
+    () =>
+      pageSourceLinks({
+        scm,
+        source: resolved?.manifest.source,
+        pagePath: page?.path,
+      }),
+    [scm, resolved, page],
+  );
 
   useEffect(() => {
     if (activeSlug === undefined || !resolved) {
@@ -219,6 +236,8 @@ export function DocsBrowser({
               type={page.type}
               status={page.status}
               updatedAt={resolved.updatedAt}
+              editUrl={sourceLinks?.editUrl}
+              sourceUrl={sourceLinks?.viewUrl}
             />
           )}
           {pageError && (

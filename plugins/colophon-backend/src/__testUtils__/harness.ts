@@ -43,6 +43,7 @@ export interface PageSpec {
   type?: Page['type'];
   status?: Page['status'];
   tags?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface PublishSpec {
@@ -153,6 +154,7 @@ export async function createHarness(options: {
       type: page.type,
       status: page.status ?? 'current',
       tags: page.tags ?? [],
+      metadata: page.metadata,
       headings: [],
       contentHash: sha256(page.markdown),
       size: Buffer.byteLength(page.markdown),

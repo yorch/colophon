@@ -30,5 +30,22 @@ export interface Config {
      * @default "/colophon"
      */
     appPath?: string;
+
+    /**
+     * The catalog annotation that links an entity to a documentation bundle.
+     *
+     * Declared here for the same reason `appPath` is: a frontend app depends
+     * on this package and not on the backend plugin, so the backend's
+     * declaration is out of scope when config is filtered for the browser,
+     * and the key would be stripped before it ever reached the entity tab.
+     *
+     * The tab's VISIBILITY is a separate lever — `EntityContentBlueprint`
+     * takes a `filter` from app-config — but the tab's contents read the
+     * annotation off the entity, so both have to name the same key.
+     *
+     * @visibility frontend
+     * @default "brnby.io/colophon"
+     */
+    annotation?: string;
   };
 }

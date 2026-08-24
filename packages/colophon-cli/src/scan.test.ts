@@ -234,3 +234,84 @@ describe('docs.yaml errors', () => {
     await expect(scan(dir)).resolves.toBeDefined();
   });
 });
+
+/**
+ * An organisation's own frontmatter vocabulary used to be parsed and then
+ * dropped on the floor, because everything outside the fixed set fell off the
+ * end of the reader. These assert what survives AND what does not: the keys
+ * Colophon defines must not be duplicated into the passthrough, or every
+ * consumer gets two sources of truth for a title.
+ */
+describe('scan custom frontmatter', () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      made.splice(0).map(path => rm(path, { recursive: true, force: true })),
+    );
+  });
+
+  async function scanOne(frontmatter: string) {
+    await mkdir(TMP_ROOT, { recursive: true });
+    const created = await mkdtemp(join(TMP_ROOT, 'scan-meta-'));
+    made.push(created);
+    await writeFile(
+      join(created, 'index.md'),
+      `---\n${frontmatter}\n---\n\n# Title\n`,
+    );
+    const { pages } = await scan(created);
+    return pages[0];
+  }
+
+  it('keeps keys Colophon does not define', async () => {
+    const page = await scanOne(
+      ['title: Deploy', 'owner: platform', 'jira: PLAT-1'].join('\n'),
+    );
+
+    expect(page.metadata).toEqual({ owner: 'platform', jira: 'PLAT-1' });
+    expect(page.title).toBe('Deploy');
+  });
+
+  it('does not duplicate the keys it does define', async () => {
+    const page = await scanOne(
+      [
+        'title: Deploy',
+        'description: How to deploy',
+        'type: how-to',
+        'status: draft',
+        'tags: [ops]',
+        'nav_order: 3',
+      ].join('\n'),
+    );
+
+    expect(page.metadata).toBeUndefined();
+    expect(page.navOrder).toBe(3);
+  });
+
+  /**
+   * Undefined rather than an empty object, because the manifest is
+   * canonicalised and hashed to produce the revision id: an always-present
+   * `metadata: {}` would give every existing bundle a new revision id the
+   * first time it was republished after upgrading, for no change in content.
+   */
+  it('records nothing at all when a page has no custom keys', async () => {
+    const page = await scanOne('title: Deploy');
+
+    expect(page.metadata).toBeUndefined();
+  });
+
+  it('preserves structured values rather than flattening them', async () => {
+    const page = await scanOne(
+      [
+        'owners:',
+        '  - a@example.com',
+        '  - b@example.com',
+        'reviewed: true',
+      ].join('\n'),
+    );
+
+    expect(page.metadata).toEqual({
+      owners: ['a@example.com', 'b@example.com'],
+      reviewed: true,
+    });
+  });
+});
