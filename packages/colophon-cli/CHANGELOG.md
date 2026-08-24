@@ -1,5 +1,205 @@
 # @brnby/colophon-cli
 
+## 0.5.0
+
+### Minor Changes
+
+- [#34](https://github.com/yorch/colophon/pull/34) [`4a2ab17`](https://github.com/yorch/colophon/commit/4a2ab173890c58a9cc084af6361769ec913d50b0) Thanks [@yorch](https://github.com/yorch)! - Source links on every page, custom frontmatter carried through to agents, and
+  a configurable catalog annotation.
+  
+  **A rendered page now offers "View source" and "Edit this page".** The
+  provenance was already in the manifest — `--source-url`, `--source-ref`,
+  `--source-path` have been recorded since the beginning — and
+  `ColophonPageHeader` already had an `editUrl` prop. Nothing computed one, so
+  a reader had no way back to the Markdown behind the page.
+  
+  The URL is built through Backstage's `ScmIntegrationRegistry`, the same
+  component the catalog uses, rather than by assembling a GitHub path. `byUrl`
+  decides whether the host is one this portal integrates with, `resolveUrl`
+  joins the page's path onto the docs root, and `resolveEditUrl` produces that
+  provider's edit URL — so a self-hosted GitLab gets `/-/edit/` and GitHub
+  Enterprise gets `/edit/` without either being named anywhere. GitHub, GitLab,
+  Gitea and Bitbucket Cloud are covered.
+  
+  Both links are **absent, not broken**, whenever any of that is missing: a
+  bundle published without `--source-*`, a host with no configured integration,
+  or a provider whose URL shape is not known. That is the state every existing
+  bundle is in until its next publish, so it had to be the quiet one. "View
+  source" is offered alongside "Edit this page" rather than instead of it
+  because several providers have no edit mode and return the view URL
+  unchanged; the header renders one link, not two identical ones, when they
+  match. `ColophonPageHeader` takes `sourceUrl` as a new optional prop.
+  
+  **Custom frontmatter survives publishing.** Keys Colophon does not define —
+  `owner`, `reviewed`, `jira`, whatever an organisation uses — were parsed and
+  then dropped. They now travel on the page's new `metadata` field, all the way
+  from the publisher to `colophon:get-page`, so an agent asked "who owns this
+  page" can answer. Values keep their YAML shape: nested maps stay nested and
+  lists stay lists.
+  
+  This is a **passthrough and nothing more**. Custom keys are not indexed and
+  cannot be searched or filtered on; querying them is a separate feature with
+  its own design. They ride on `colophon:get-page` only — `colophon:list-pages`
+  stays a cheap index, so an agent answering "which pages does platform own?"
+  reads the pages it cares about rather than getting the whole corpus's
+  metadata in one response.
+  
+  *What an adopter sees:* it depends on whether their pages already carry keys
+  outside `title`, `description`, `type`, `status`, `tags`, `nav_order`.
+  
+  - **No custom keys anywhere:** nothing changes at all. `metadata` is omitted
+    rather than defaulted to `{}`, and `canonicalize` drops `undefined`, so
+    re-publishing unchanged documentation produces the **same revision id** as
+    before — verified by publishing one fixture with both the old and the new
+    publisher and getting the same hash.
+  - **Already using `owner:` / `reviewed:` / anything else:** the next publish
+    produces a **new revision id for byte-identical documentation**, because
+    content that used to be discarded is now recorded. That is correct — the
+    manifest genuinely describes more than it did — but it means one extra
+    revision lands in the retention window on upgrade, and a pipeline asserting
+    that an unchanged commit republishes to the same revision will see it move
+    once.
+  
+  *What an older deployment sees:* the field is additive in both directions, so
+  the two halves can be upgraded independently. A backend running the previous
+  schema parses a newer bundle with an object schema that does not declare
+  `metadata`, and zod strips undeclared keys — it reads the revision correctly
+  and simply never sees the field. A backend running this version reads an
+  older bundle and finds the key absent, which is exactly the "no custom keys"
+  case. `schemaVersion` therefore stays at `1`, because neither direction
+  errors. The backend gains a migration adding a nullable `metadata` column to
+  `colophon_pages`; rows written before it read back as "no custom keys", which
+  is the truth for them.
+  
+  **`colophon.annotation` makes the catalog annotation configurable**, defaulting
+  to `brnby.io/colophon`. An organisation that namespaces its annotations no
+  longer has to rename them across its whole catalog to adopt the plugin. The
+  backend reads it when indexing entity links, and the frontend reads it — hence
+  `@visibility frontend` — because the documentation tab has to look up the same
+  key that was indexed.
+  
+  One thing has to move with it: the predicate deciding whether the tab appears
+  at all is an `EntityContentBlueprint` filter, which the frontend system
+  evaluates without access to config. Rename the annotation and override the
+  filter together, or the tab keeps testing for the old key and an annotated
+  entity silently gets no tab. Both are documented in
+  `docs/reference/configuration.md`.
+
+- [#37](https://github.com/yorch/colophon/pull/37) [`54b349c`](https://github.com/yorch/colophon/commit/54b349c6d836400165c521020b08f87ae1709dbb) Thanks [@yorch](https://github.com/yorch)! - **Bundle storage is now an extension point.** An organisation whose object
+  storage is neither a filesystem nor S3-compatible — Azure Blob being the
+  obvious case — had exactly one option: fork the backend. `createBundleStorage`
+  was a hardcoded `if (local) … if (s3) … else throw`, `BundleStorage` was not
+  exported, and the plugin built its own store with nothing to inject into.
+  
+  `colophonStorageExtensionPoint` is the first extension point this plugin
+  exposes. A backend module registers a **named factory**, and
+  `colophon.storage.type` selects it by name:
+  
+  ```ts
+  import { colophonStorageExtensionPoint } from '@brnby/plugin-colophon-backend';
+  
+  export const colophonModuleAzureStorage = createBackendModule({
+    pluginId: 'colophon',
+    moduleId: 'azure-storage',
+    register(env) {
+      env.registerInit({
+        deps: { colophonStorage: colophonStorageExtensionPoint },
+        async init({ colophonStorage }) {
+          colophonStorage.addFactory({
+            name: 'azure',
+            factory: ({ config }) =>
+              new AzureBundleStorage(config?.getString('container')),
+          });
+        },
+      });
+    },
+  });
+  ```
+  
+  ```yaml
+  colophon:
+    storage:
+      type: azure
+      azure: { container: docs }
+  ```
+  
+  A *name* rather than a store, because where bundles live is a deployment
+  decision and deployment decisions belong in `app-config.yaml`. An extension
+  point taking a store directly would mean staging and production differed by a
+  code branch rather than a config key, and the same backend image could no
+  longer be promoted between them.
+  
+  **`local` and `s3` register through the same `addFactory` call**, before any
+  module runs. There is one lookup path rather than a built-in shortcut and an
+  adopter path that nothing exercises — the shape this project has been bitten
+  by before. It also means the duplicate-name check covers them: a module
+  cannot silently replace `local`.
+  
+  Newly exported from the package's single entry point (there is no `/alpha`
+  subpath): `colophonStorageExtensionPoint`, `ColophonStorageExtensionPoint`,
+  `BundleStorage`, `BundleStorageFactory`, `BundleStorageFactoryOptions`,
+  `BundleStorageRegistration`.
+  
+  `addFactory` and the factory both take an options object rather than
+  positional arguments. This is the extension point's own signature and the
+  hardest thing in the package to change later, and `description`, an explicit
+  `override` and a deprecation marker are each free to add now and breaking once
+  anyone has called it. **Any method added to `BundleStorage` in future will be
+  optional** — a new required method would break every adopter store at once,
+  which is precisely what adding `list` and `delete` did to the CLI's copy.
+  
+  *What an adopter gains:* a three-method interface — `has`, `get`, `put` — and
+  a factory that is handed its own slice of config plus a logger. Not the root
+  config: a module already has `coreServices.rootConfig` in its own `deps`.
+  Registration happens during module init and the store is built during plugin
+  init, which Backstage guarantees runs after every module of that plugin, so
+  there is no ordering to arrange and no lifecycle hook to hang it on.
+  
+  *Failures are startup failures, never a 404 on the first read.* A `type`
+  nothing registered stops the backend and **names what is registered**, because
+  the set is open and the reader cannot look it up:
+  `Unknown colophon.storage.type "azur"; registered types are "local", "s3".
+  Register another with colophonStorageExtensionPoint from a backend module.`
+  A second factory for a taken name throws
+  `A colophon.storage factory named "local" is already registered`, naming the
+  module that lost. A factory that throws is wrapped with the store's name. A
+  factory that returns something that is not a store is refused at startup too —
+  types catch the naive case and not a cast through `any`, a JavaScript adopter
+  or a duck-typed SDK object, and without the check that store starts the backend
+  and fails on the first page opened. Registering after the store has been built
+  is refused rather than accepted and ignored.
+  
+  *The backend now says where it reads from.* One line naming the resolved type,
+  and for the built-ins the resolved absolute directory or `s3://bucket/prefix`.
+  Nothing said so before, and `storage.local.root` silently resolving to the
+  wrong directory is a bug this project has already shipped. Each factory is
+  handed a logger tagged with its store's name.
+  
+  *The config schema.* `colophon.storage.type` was `'local' | 's3'` and is now
+  `string`. It cannot stay an enum: an enum would reject every adopter's own
+  name outright. The check moved to startup, where the backend knows what it
+  installed. Sub-config still validates — a module declares its own
+  `colophon.storage.<name>` keys in its own `config.d.ts`, Backstage merges
+  package schemas additively, and `config:check --strict` continues to catch a
+  misspelling of the built-in keys *and* the adopter's.
+  
+  *Existing deployments need no change.* `colophon.storage` is read exactly as
+  before, `type` still defaults to `local`, and both built-in stores are
+  selected by the same names with the same keys. No `app-config.yaml` edit, no
+  code change, nothing to migrate.
+  
+  *Not merged with the CLI's `BundleStorage`*, which has five methods. The
+  publisher writes and collects garbage, so it needs `list` and `delete`; the
+  backend is expected to hold read-only credentials and calls neither. Merging
+  them would force every custom reader to implement a `delete` nothing calls.
+  `createColophonService` takes an optional `storage`; omitted, it behaves as
+  it always has.
+
+### Patch Changes
+
+- Updated dependencies [[`4a2ab17`](https://github.com/yorch/colophon/commit/4a2ab173890c58a9cc084af6361769ec913d50b0), [`54b349c`](https://github.com/yorch/colophon/commit/54b349c6d836400165c521020b08f87ae1709dbb)]:
+  - @brnby/colophon-common@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
