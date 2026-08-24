@@ -60,6 +60,7 @@ async function setup() {
         description: 'How to rotate database credentials.',
         type: 'how-to',
         tags: ['security'],
+        metadata: { owner: 'platform', jira: 'PLAT-42', reviewed: true },
         markdown: `## Rotate\n\n${longBody('rotate')}\n\n## Verify\n\n${longBody('verify')}`,
       },
     ],
@@ -210,6 +211,34 @@ describe('get-page', () => {
     await expect(
       s.run('get-page', { bundleId: DEFAULT_BUNDLE, slug: 'nope' }),
     ).rejects.toThrow();
+  });
+
+  /**
+   * The end of the passthrough. Custom frontmatter has come from the
+   * manifest, through storage, through the pages table, and out here — and
+   * this is the only assertion that covers the whole path, because the pages
+   * table is what the action answers from, NOT the stored manifest.
+   */
+  it('hands an agent the organisation’s own frontmatter', async () => {
+    const { output } = (await s.run('get-page', {
+      bundleId: DEFAULT_BUNDLE,
+      slug: 'guides/rotate',
+    })) as { output: { metadata?: Record<string, unknown> } };
+
+    expect(output.metadata).toEqual({
+      owner: 'platform',
+      jira: 'PLAT-42',
+      reviewed: true,
+    });
+  });
+
+  it('omits the field for a page that carries none', async () => {
+    const { output } = (await s.run('get-page', {
+      bundleId: DEFAULT_BUNDLE,
+      slug: '',
+    })) as { output: { metadata?: Record<string, unknown> } };
+
+    expect(output.metadata).toBeUndefined();
   });
 });
 

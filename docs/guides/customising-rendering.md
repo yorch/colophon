@@ -405,6 +405,37 @@ call sites that are not components. Taking the opt-out means taking on layout,
 navigation state, the container queries and the cascade layer as well as the
 prose rules — it is all one sheet.
 
+## Source and edit links
+
+A rendered page carries **View source** and **Edit this page** in its header
+whenever it can work out where the Markdown lives. Nothing needs configuring
+for it, and the pair appears only when all three of these hold:
+
+1. The bundle was published with `--source-url` and `--source-ref`. Bundles
+   published before this existed have neither.
+2. `integrations` in `app-config.yaml` has an entry whose host matches that
+   URL — the same block the catalog and Scaffolder already use.
+3. Colophon knows that provider's URL shape: GitHub, GitLab, Gitea and
+   Bitbucket Cloud, self-hosted instances included.
+
+Miss any one and the header renders **no link**, rather than one that 404s.
+That is the state every existing bundle is in immediately after upgrading,
+and it resolves itself on the next publish from a CI job that passes the
+`--source-*` flags.
+
+The URL is built through Backstage's `ScmIntegrationRegistry` — the same
+component that gives the catalog its "view source" links — rather than by
+assembling a GitHub path by hand, so a self-hosted GitLab at
+`git.example.com` gets `/-/edit/` and a GitHub Enterprise host gets `/edit/`
+without either being named here. Both links open in a new tab.
+
+Providers whose web UI has no edit mode return the view URL unchanged from
+the registry; the header notices the two are equal and renders one link, not
+two identical ones.
+
+To render something else entirely, build your own shell:
+`ColophonPageHeader` takes `editUrl` and `sourceUrl` as plain props.
+
 ## What is not overridable
 
 Stated plainly, because an extension point nobody can find is worse than an

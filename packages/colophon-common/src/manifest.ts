@@ -60,6 +60,26 @@ export const pageSchema = z.object({
   status: docStatusSchema.default('current'),
   tags: z.array(z.string()).default([]),
   navOrder: z.number().int().optional(),
+  /**
+   * Frontmatter keys Colophon does not define, carried through verbatim.
+   *
+   * An organisation's own vocabulary — `owner`, `reviewed`, `jira` — was
+   * parsed and then dropped, because everything not in the fixed set above
+   * fell off the end of the publisher's frontmatter reader. This is a
+   * PASSTHROUGH and nothing more: no field here is indexed, filtered or
+   * queried, so adding a key cannot change which pages a search returns.
+   *
+   * Additive in both directions, which is what lets a deployment upgrade one
+   * half at a time. An older backend parses a newer bundle with a schema that
+   * has no `metadata` key, and zod objects strip what they do not declare, so
+   * it reads the revision correctly and simply does not see the extra field.
+   * A newer backend parses an older bundle and finds the key absent, which is
+   * why this is `optional()` rather than carrying a `{}` default: a default
+   * would materialise an empty object on every page of every existing bundle,
+   * and `canonicalize` hashes what it is given, so re-publishing unchanged
+   * documentation would produce a new revision id for no reason.
+   */
+  metadata: z.record(z.string(), z.unknown()).optional(),
   headings: z.array(headingSchema).default([]),
   contentHash: contentHashSchema,
   size: z.number().int().nonnegative(),

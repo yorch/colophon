@@ -28,6 +28,8 @@ export interface PageDraft {
   status: DocStatus;
   tags: string[];
   navOrder?: number;
+  /** Frontmatter keys Colophon does not define. Undefined when there are none. */
+  metadata?: Record<string, unknown>;
   headings: Heading[];
   references: Reference[];
   rawBytes: Buffer;

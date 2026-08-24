@@ -10,6 +10,17 @@ export interface ColophonPageHeaderProps {
   updatedAt?: string;
   /** "Edit this page" target, derived from the manifest's git source. */
   editUrl?: string;
+  /**
+   * "View source" target — the same file, not opened for editing.
+   *
+   * Offered beside the edit link rather than instead of it because several
+   * providers have no edit URL at all and return the view URL unchanged;
+   * showing both means the reader who only wants to read the Markdown is not
+   * routed through an editor, and the one who wants to edit still can.
+   * Rendered only when it differs from `editUrl`, since on those providers
+   * two links to the same place is noise.
+   */
+  sourceUrl?: string;
 }
 
 const FLEX_WRAP = { flexWrap: 'wrap' } as const;
@@ -34,6 +45,7 @@ export function ColophonPageHeader({
   status,
   updatedAt,
   editUrl,
+  sourceUrl,
 }: ColophonPageHeaderProps) {
   // `current` is the default for every page, so badging it would put a chip on
   // every page and tell the reader nothing.
@@ -60,6 +72,16 @@ export function ColophonPageHeader({
             <Text variant="body-small" color="secondary">
               Updated <time dateTime={updatedAt}>{formatDate(updatedAt)}</time>
             </Text>
+          ) : null}
+          {sourceUrl && sourceUrl !== editUrl ? (
+            <Link
+              href={sourceUrl}
+              variant="body-small"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View source
+            </Link>
           ) : null}
           {editUrl ? (
             <Link

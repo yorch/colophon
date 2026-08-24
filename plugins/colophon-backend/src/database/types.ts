@@ -27,6 +27,8 @@ export interface PageRecord {
   tags: string[];
   contentHash: string;
   navOrder?: number;
+  /** Frontmatter keys Colophon does not define, carried through verbatim. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChunkRecord {

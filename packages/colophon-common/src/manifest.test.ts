@@ -182,3 +182,86 @@ describe('manifestSchema', () => {
     expect(parseManifest(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
   });
 });
+
+/**
+ * `metadata` is an addition to the wire format, so what matters is not that
+ * it round-trips — it is that neither side of a half-upgraded deployment
+ * breaks on the other's bundles. Both directions are asserted here because
+ * only one of them can be observed by running the current code against the
+ * current code.
+ */
+describe('custom frontmatter passthrough', () => {
+  const page = (extra: object) => ({
+    path: 'guides/deploy.md',
+    slug: 'guides/deploy',
+    title: 'Deploy',
+    contentHash: HASH,
+    size: 10,
+    ...extra,
+  });
+
+  it('carries unrecognised keys through verbatim', () => {
+    const parsed = pageSchema.parse(
+      page({ metadata: { owner: 'platform', jira: 'PLAT-1', reviewed: true } }),
+    );
+
+    expect(parsed.metadata).toEqual({
+      owner: 'platform',
+      jira: 'PLAT-1',
+      reviewed: true,
+    });
+  });
+
+  it('preserves nested and non-string values, having no opinion on shape', () => {
+    const parsed = pageSchema.parse(
+      page({ metadata: { sla: { tier: 1, hours: [9, 17] }, archived: null } }),
+    );
+
+    expect(parsed.metadata).toEqual({
+      sla: { tier: 1, hours: [9, 17] },
+      archived: null,
+    });
+  });
+
+  // NEW backend, OLD bundle: every revision published before this shipped.
+  it('reads a page published without the field', () => {
+    const parsed = pageSchema.parse(page({}));
+
+    expect(parsed.metadata).toBeUndefined();
+    expect(parsed.title).toBe('Deploy');
+  });
+
+  // OLD backend, NEW bundle. A zod object strips what it does not declare,
+  // so the older schema — reconstructed here by omitting the key — parses a
+  // newer page successfully and simply does not see the extra field.
+  it('lets a schema without the field still parse a page that has one', () => {
+    const olderPageSchema = pageSchema.omit({ metadata: true });
+
+    const parsed = olderPageSchema.parse(page({ metadata: { owner: 'x' } }));
+
+    expect(parsed).not.toHaveProperty('metadata');
+    expect(parsed.title).toBe('Deploy');
+  });
+
+  it('parses a whole manifest whose pages carry the field', () => {
+    const manifest = parseManifest(
+      minimalManifest({
+        pages: [
+          {
+            path: 'index.md',
+            slug: '',
+            title: 'Payments API',
+            contentHash: HASH,
+            size: 128,
+            status: 'current',
+            tags: [],
+            headings: [],
+            metadata: { owner: 'payments' },
+          },
+        ],
+      }),
+    );
+
+    expect(manifest.pages[0].metadata).toEqual({ owner: 'payments' });
+  });
+});

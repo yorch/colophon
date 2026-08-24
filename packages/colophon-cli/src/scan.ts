@@ -196,6 +196,7 @@ function toPageDraft(
     status: docStatusSchema.parse(data.status ?? 'current'),
     tags: toStringArray(data.tags),
     navOrder: typeof data.nav_order === 'number' ? data.nav_order : undefined,
+    metadata: customMetadata(data),
     headings,
     references,
     rawBytes,
@@ -223,6 +224,38 @@ function parseFrontmatterData(
   } catch {
     return {};
   }
+}
+
+/**
+ * Frontmatter keys Colophon has no field for.
+ *
+ * Named by exclusion rather than by an allow-list the adopter configures:
+ * every key Colophon reads is listed here, so a key added to the schema later
+ * stops being passthrough automatically, and the two cannot disagree about
+ * who owns a name. `nav_order` is spelled as it is authored, not as the
+ * manifest field it becomes.
+ *
+ * Undefined rather than `{}` when a page has no extra keys, so a bundle
+ * published from documentation with no custom frontmatter canonicalises —
+ * and therefore hashes — exactly as it did before this existed.
+ */
+const COLOPHON_FRONTMATTER_KEYS = new Set([
+  'title',
+  'description',
+  'type',
+  'status',
+  'tags',
+  'nav_order',
+]);
+
+function customMetadata(
+  data: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const entries = Object.entries(data).filter(
+    ([key, value]) =>
+      !COLOPHON_FRONTMATTER_KEYS.has(key) && value !== undefined,
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 /** Frontmatter, then the first H1, then the filename. */

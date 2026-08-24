@@ -2,7 +2,7 @@ import type { AuthService, LoggerService } from '@backstage/backend-plugin-api';
 import { CATALOG_FILTER_EXISTS } from '@backstage/catalog-client';
 import { stringifyEntityRef } from '@backstage/catalog-model';
 import type { CatalogService } from '@backstage/plugin-catalog-node';
-import { COLOPHON_ANNOTATION, parseBundleRef } from '@brnby/colophon-common';
+import { parseBundleRef } from '@brnby/colophon-common';
 import type { ColophonDatabase, EntityLinkRecord } from '../database';
 
 /**
@@ -17,6 +17,13 @@ export async function syncEntityLinks(options: {
   db: ColophonDatabase;
   auth: AuthService;
   logger: LoggerService;
+  /**
+   * The annotation to index, from config. Passed in rather than read from the
+   * contract's constant so a deployment that renamed it gets one key
+   * everywhere: the filter below, the lookup, and the frontend all have to
+   * name the same string or the tab is empty on an annotated entity.
+   */
+  annotation: string;
   /** Aborts the pass when the scheduler's timeout fires. */
   abortSignal?: AbortSignal;
 }): Promise<{ linked: number; skipped: number }> {
@@ -24,7 +31,7 @@ export async function syncEntityLinks(options: {
   const { items } = await options.catalog.getEntities(
     {
       filter: {
-        [`metadata.annotations.${COLOPHON_ANNOTATION}`]: CATALOG_FILTER_EXISTS,
+        [`metadata.annotations.${options.annotation}`]: CATALOG_FILTER_EXISTS,
       },
       // All annotations rather than just ours: the catalog's field selector
       // splits on '.', and this annotation key contains one.
@@ -41,7 +48,7 @@ export async function syncEntityLinks(options: {
   const links: EntityLinkRecord[] = [];
   let skipped = 0;
   for (const entity of items) {
-    const annotation = entity.metadata.annotations?.[COLOPHON_ANNOTATION];
+    const annotation = entity.metadata.annotations?.[options.annotation];
     if (!annotation) {
       continue;
     }
@@ -58,7 +65,7 @@ export async function syncEntityLinks(options: {
       // must not abort the sync for every other entity.
       skipped += 1;
       options.logger.warn(
-        `Ignoring ${COLOPHON_ANNOTATION} on ${entityRef}: ${error}`,
+        `Ignoring ${options.annotation} on ${entityRef}: ${error}`,
       );
     }
   }

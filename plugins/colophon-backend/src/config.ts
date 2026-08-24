@@ -4,7 +4,11 @@ import {
   type SchedulerServiceTaskScheduleDefinition,
 } from '@backstage/backend-plugin-api';
 import type { Config } from '@backstage/config';
-import { DEFAULT_APP_PATH, normalizeAppPath } from '@brnby/colophon-common';
+import {
+  COLOPHON_ANNOTATION,
+  DEFAULT_APP_PATH,
+  normalizeAppPath,
+} from '@brnby/colophon-common';
 import {
   type ChunkingOptions,
   chunkingOptionsSchema,
@@ -36,7 +40,16 @@ export interface ColophonConfig {
    */
   appPath: string;
   /**
-   * How often the catalog is re-read for `brnby.io/colophon` annotations.
+   * The catalog annotation that links an entity to a bundle.
+   *
+   * Configurable because an organisation with its own annotation namespace
+   * would otherwise have to rename annotations across its whole catalog to
+   * adopt the plugin. The frontend reads the same key — hence its `frontend`
+   * visibility — since the entity tab has to look up what the sync indexed.
+   */
+  annotation: string;
+  /**
+   * How often the catalog is re-read for the linking annotation.
    *
    * Cheap: one filtered catalog query and a small table rewrite. It wants to
    * be frequent, because until it runs a newly annotated entity has no
@@ -96,6 +109,8 @@ export function readColophonConfig(config: RootConfigService): ColophonConfig {
     appPath: normalizeAppPath(
       root?.getOptionalString('appPath') ?? DEFAULT_APP_PATH,
     ),
+    annotation:
+      root?.getOptionalString('annotation')?.trim() || COLOPHON_ANNOTATION,
     entityLinkSchedule: readSchedule(
       root?.getOptionalConfig('schedule.entityLinks'),
       DEFAULT_ENTITY_LINK_SCHEDULE,
