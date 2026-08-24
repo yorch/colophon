@@ -13,6 +13,7 @@
  */
 import { createBackend } from '@backstage/backend-defaults';
 import { searchModuleColophonCollator } from '@brnby/plugin-colophon-backend';
+import { colophonModuleScratchStorage } from './scratchStorage';
 
 const backend = createBackend();
 
@@ -34,5 +35,11 @@ backend.add(import('@brnby/plugin-colophon-backend'));
 // precisely because plugin databases are scoped per plugin, and that hop
 // cannot be exercised without a running backend.
 backend.add(searchModuleColophonCollator);
+
+// A third bundle store, contributed through colophonStorageExtensionPoint the
+// way an adopter's would be. Installed always, selected only when
+// `colophon.storage.type` says `scratch` — which is the point: the seam has
+// to be exercisable without editing the plugin.
+backend.add(colophonModuleScratchStorage);
 
 backend.start();

@@ -10,6 +10,10 @@ import { readColophonConfig } from './config';
 import { createDocsAuthorizer } from './service/authorize';
 import { createColophonService } from './service/createColophonService';
 import { createRouter } from './service/router';
+import {
+  colophonStorageExtensionPoint,
+  createBundleStorageRegistry,
+} from './storage';
 
 /**
  * The Colophon backend.
@@ -21,6 +25,13 @@ import { createRouter } from './service/router';
 export const colophonPlugin = createBackendPlugin({
   pluginId: 'colophon',
   register(env) {
+    // Populated here, read in `init` below. The backend initialises every
+    // module of a plugin before the plugin itself, so by the time `init` runs
+    // the factory set is complete — building the store any earlier would make
+    // a module's registration invisible depending on ordering.
+    const storageRegistry = createBundleStorageRegistry();
+    env.registerExtensionPoint(colophonStorageExtensionPoint, storageRegistry);
+
     env.registerInit({
       deps: {
         config: coreServices.rootConfig,
@@ -52,6 +63,7 @@ export const colophonPlugin = createBackendPlugin({
           config,
           database,
           logger,
+          storage: await storageRegistry.create({ config, logger }),
         });
 
         // One authorizer, shared by the HTTP routes and the MCP actions:

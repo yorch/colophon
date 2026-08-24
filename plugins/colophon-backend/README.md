@@ -54,6 +54,30 @@ colophon:
       region: ${AWS_REGION}
 ```
 
+`storage.type` names a *registered* store rather than one of a fixed pair.
+`local` and `s3` ship with the plugin; a backend module registers another
+through `colophonStorageExtensionPoint` — also a named export of this entry
+point — and `storage.type` then selects it by name:
+
+```ts
+import { colophonStorageExtensionPoint } from '@brnby/plugin-colophon-backend';
+
+env.registerInit({
+  deps: { colophonStorage: colophonStorageExtensionPoint },
+  async init({ colophonStorage }) {
+    colophonStorage.addFactory(
+      'azure',
+      ({ config }) => new AzureBundleStorage(config?.getString('container')),
+    );
+  },
+});
+```
+
+The built-ins go in through the same `addFactory`, so there is no shortcut
+path for them and no untested one for you. A `type` nothing registered stops
+the backend and names what is registered. See
+[add your own storage](https://github.com/yorch/colophon/blob/main/docs/guides/custom-storage.md).
+
 Two schedules run on top of that: one re-reads the catalog for
 `brnby.io/colophon` annotations (cheap, wants to run often — until it does, a
 newly annotated entity has no documentation tab), and one projects

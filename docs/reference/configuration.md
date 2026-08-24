@@ -142,7 +142,7 @@ colophon:
 
 | Key | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `storage.type` | no | `local` | `s3` or `local` |
+| `storage.type` | no | `local` | `local`, `s3`, or any name a backend module registered |
 | `storage.s3.bucket` | when `s3` | — | Startup fails without it |
 | `storage.s3.region` | no | AWS SDK default | |
 | `storage.s3.prefix` | no | — | Key prefix, so one bucket can hold more than Colophon |
@@ -151,6 +151,40 @@ colophon:
 | `storage.s3.credentials.accessKeyId` | no | AWS SDK provider chain | Marked secret |
 | `storage.s3.credentials.secretAccessKey` | no | AWS SDK provider chain | Marked secret |
 | `storage.local.directory` | no | `./colophon-storage` | Resolved against the backend's working directory. Development only |
+
+### Another store entirely
+
+`storage.type` names a **registered** store, not one of a fixed pair.
+`local` and `s3` ship with the plugin; a backend module adds more through
+`colophonStorageExtensionPoint`, and then selects one with the same key:
+
+```yaml
+colophon:
+  storage:
+    type: azure
+    azure:
+      container: docs
+```
+
+Because the set is open, `type` cannot be an enum in the config schema — a
+schema listing only the built-ins would reject every adopter's own name. The
+check moves to startup instead, where the backend knows what it installed:
+
+```text
+Unknown colophon.storage.type "azur"; registered types are "azure", "local",
+"s3". Register another with colophonStorageExtensionPoint from a backend
+module.
+```
+
+Nothing falls back to a default. A store named in config and not registered
+stops the backend, rather than resolving to `local` and 404ing every read.
+
+The sub-config (`storage.azure.*` above) is declared by the module that reads
+it, in its own `config.d.ts`. Backstage merges the schemas each package
+contributes additively, so the merged `colophon.storage` carries the built-in
+keys and the adopter's, and `config:check --strict` still catches a
+misspelling of either. [Add your own storage](../guides/custom-storage.md)
+walks through it.
 
 ### Credentials
 
