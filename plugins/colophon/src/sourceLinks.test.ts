@@ -145,6 +145,56 @@ describe('pageSourceLinks', () => {
     ).toBeUndefined();
   });
 
+  /**
+   * Percent-encoded separators are the variant that got through: the WHATWG
+   * URL parser does not decode `%2F`, so the segment stays literal and a
+   * containment check on the composed string passes.
+   */
+  it.each([
+    ['plain traversal', '../../../etc/passwd'],
+    ['percent-encoded slashes', '..%2f..%2f..%2fetc/passwd'],
+    ['uppercase percent-encoding', '..%2F..%2Fetc/passwd'],
+    ['percent-encoded backslashes', '..%5c..%5cetc/passwd'],
+    ['doubly encoded', '..%252f..%252fetc/passwd'],
+    ['encoded dots', '%2e%2e%2f%2e%2e%2fetc/passwd'],
+  ])('refuses a page path using %s', (_name, pagePath) => {
+    expect(
+      pageSourceLinks({ scm, source: source(), pagePath }),
+    ).toBeUndefined();
+  });
+
+  /**
+   * The docs root is composed from three manifest fields, and only one of
+   * them used to be checked. Each of these produced a plausible-looking link
+   * to somewhere else in — or above — the repository.
+   */
+  it.each([
+    ['path', source({ path: '../../..' })],
+    ['path, encoded', source({ path: '..%2f..%2f..' })],
+    ['ref', source({ ref: 'main/../../..' })],
+    ['ref, encoded', source({ ref: 'main%2f..%2f..' })],
+  ])(
+    'refuses a source.%s that climbs out of the repository',
+    (_name, value) => {
+      expect(
+        pageSourceLinks({ scm, source: value, pagePath: 'index.md' }),
+      ).toBeUndefined();
+    },
+  );
+
+  it('still accepts a nested page path with no traversal', () => {
+    // The guard must not reject ordinary nesting, which is most pages.
+    expect(
+      pageSourceLinks({
+        scm,
+        source: source(),
+        pagePath: 'guides/deep/nested/page.md',
+      })?.viewUrl,
+    ).toBe(
+      'https://github.com/yorch/colophon/tree/main/docs/guides/deep/nested/page.md',
+    );
+  });
+
   it('does not let a page path escape the docs root', () => {
     expect(
       pageSourceLinks({

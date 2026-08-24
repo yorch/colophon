@@ -1,9 +1,5 @@
 import type { Entity } from '@backstage/catalog-model';
-import {
-  type ConfigApi,
-  configApiRef,
-  useApi,
-} from '@backstage/core-plugin-api';
+import type { ConfigApi } from '@backstage/core-plugin-api';
 import {
   type BundleRef,
   COLOPHON_ANNOTATION,
@@ -54,11 +50,6 @@ export function readBundleRef(
   } catch {
     return undefined;
   }
-}
-
-/** Reads the bundle ref using the app's configured annotation key. */
-export function useBundleRef(entity: Entity): BundleRef | undefined {
-  return readBundleRef(entity, readAnnotationKey(useApi(configApiRef)));
 }
 
 /**

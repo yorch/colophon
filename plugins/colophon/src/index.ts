@@ -12,7 +12,6 @@ export {
   isWithinSubpath,
   readAnnotationKey,
   readBundleRef,
-  useBundleRef,
 } from './annotation';
 export type {
   BundleSummary,
