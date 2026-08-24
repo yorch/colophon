@@ -1,5 +1,10 @@
 import type { Entity } from '@backstage/catalog-model';
-import { isColophonAvailable, readBundleRef } from './annotation';
+import { ConfigReader } from '@backstage/config';
+import {
+  isColophonAvailable,
+  readAnnotationKey,
+  readBundleRef,
+} from './annotation';
 
 function entity(annotation?: string): Entity {
   return {
@@ -53,5 +58,55 @@ describe('isColophonAvailable', () => {
     ['no annotation', undefined, false],
   ])('is %s -> %s', (_name, annotation, expected) => {
     expect(isColophonAvailable(entity(annotation))).toBe(expected);
+  });
+});
+
+/**
+ * The frontend half of `colophon.annotation`. It has to agree with the
+ * backend's `readColophonConfig`, including on what a blank value means —
+ * an annotation named "" matches nothing, so honouring it would hide every
+ * documentation tab in the portal with nothing logged.
+ */
+describe('readAnnotationKey', () => {
+  const read = (colophon?: object) =>
+    readAnnotationKey(new ConfigReader(colophon ? { colophon } : {}));
+
+  it('defaults to the contract constant', () => {
+    expect(read()).toBe('brnby.io/colophon');
+  });
+
+  it('returns the configured key', () => {
+    expect(read({ annotation: 'acme.example.com/docs' })).toBe(
+      'acme.example.com/docs',
+    );
+  });
+
+  it('treats a whitespace-only key as unset', () => {
+    expect(read({ annotation: '   ' })).toBe('brnby.io/colophon');
+  });
+
+  it('lets the config reader reject an empty key rather than masking it', () => {
+    // `getOptionalString` throws on '' rather than returning it, and that
+    // error names the key — which is a better answer than quietly falling
+    // back, because an operator who wrote `annotation: ""` meant something.
+    expect(() => read({ annotation: '' })).toThrow(/colophon.annotation/);
+  });
+
+  it('reads the key the entity is then looked up under', () => {
+    // The two halves have to move together: a configured key that nothing
+    // looks the entity up under is the same bug as no key at all.
+    const key = read({ annotation: 'acme.example.com/docs' });
+    const subject: Entity = {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'Component',
+      metadata: {
+        name: 'payments-api',
+        annotations: { 'acme.example.com/docs': 'github.com/brnby/api' },
+      },
+    };
+
+    expect(readBundleRef(subject, key)?.bundleId).toBe('github.com/brnby/api');
+    // ...and the default key must NOT find it, or the test proves nothing.
+    expect(readBundleRef(subject)).toBeUndefined();
   });
 });

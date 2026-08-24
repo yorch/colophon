@@ -41,14 +41,26 @@ lists stay lists.
 
 This is a **passthrough and nothing more**. Custom keys are not indexed and
 cannot be searched or filtered on; querying them is a separate feature with
-its own design.
+its own design. They ride on `colophon:get-page` only — `colophon:list-pages`
+stays a cheap index, so an agent answering "which pages does platform own?"
+reads the pages it cares about rather than getting the whole corpus's
+metadata in one response.
 
-*What an adopter sees:* nothing changes until a page carries a key outside
-`title`, `description`, `type`, `status`, `tags`, `nav_order`. Because
-`metadata` is omitted rather than defaulted to `{}` when a page has no custom
-keys, re-publishing unchanged documentation produces the **same revision id**
-as before — verified by publishing the same fixture with both the old and new
-publisher.
+*What an adopter sees:* it depends on whether their pages already carry keys
+outside `title`, `description`, `type`, `status`, `tags`, `nav_order`.
+
+- **No custom keys anywhere:** nothing changes at all. `metadata` is omitted
+  rather than defaulted to `{}`, and `canonicalize` drops `undefined`, so
+  re-publishing unchanged documentation produces the **same revision id** as
+  before — verified by publishing one fixture with both the old and the new
+  publisher and getting the same hash.
+- **Already using `owner:` / `reviewed:` / anything else:** the next publish
+  produces a **new revision id for byte-identical documentation**, because
+  content that used to be discarded is now recorded. That is correct — the
+  manifest genuinely describes more than it did — but it means one extra
+  revision lands in the retention window on upgrade, and a pipeline asserting
+  that an unchanged commit republishes to the same revision will see it move
+  once.
 
 *What an older deployment sees:* the field is additive in both directions, so
 the two halves can be upgraded independently. A backend running the previous

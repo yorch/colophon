@@ -118,7 +118,7 @@ export async function scan(docsDir: string): Promise<ScanResult> {
     }
     const bytes = await readFile(`${docsDir}/${path}`);
     if (/\.mdx?$/i.test(path)) {
-      pages.push(toPageDraft(path, bytes, config.defaultType));
+      pages.push(toPageDraft(path, bytes, config.defaultType, diagnostics));
     } else {
       assets.push({ path, mediaType: mediaTypeFor(path), bytes });
     }
@@ -171,6 +171,7 @@ function toPageDraft(
   path: string,
   rawBytes: Buffer,
   defaultType: DocType | undefined,
+  diagnostics: Diagnostic[],
 ): PageDraft {
   // Frontmatter boundaries come from the contract rather than from a parser
   // of our own choosing, so the body we validate anchors against is byte for
@@ -196,7 +197,7 @@ function toPageDraft(
     status: docStatusSchema.parse(data.status ?? 'current'),
     tags: toStringArray(data.tags),
     navOrder: typeof data.nav_order === 'number' ? data.nav_order : undefined,
-    metadata: customMetadata(data),
+    metadata: customMetadata(data, path, diagnostics),
     headings,
     references,
     rawBytes,
@@ -250,12 +251,54 @@ const COLOPHON_FRONTMATTER_KEYS = new Set([
 
 function customMetadata(
   data: Record<string, unknown>,
+  path: string,
+  diagnostics: Diagnostic[],
 ): Record<string, unknown> | undefined {
-  const entries = Object.entries(data).filter(
-    ([key, value]) =>
-      !COLOPHON_FRONTMATTER_KEYS.has(key) && value !== undefined,
-  );
+  const entries: Array<[string, unknown]> = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (COLOPHON_FRONTMATTER_KEYS.has(key) || value === undefined) {
+      continue;
+    }
+    if (!isSerialisable(value)) {
+      // Dropped rather than fatal, matching how a malformed frontmatter block
+      // degrades to "no metadata" instead of failing the whole publish. The
+      // message names the file and the key because the alternative — what
+      // this used to do — was a bare stack overflow from inside
+      // `canonicalize`, naming neither.
+      diagnostics.push({
+        level: 'warning',
+        message:
+          `frontmatter key "${key}" cannot be represented in the manifest ` +
+          '(a recursive YAML anchor, or nesting too deep to serialise) and ' +
+          'was dropped',
+        path,
+      });
+      continue;
+    }
+    entries.push([key, value]);
+  }
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
+ * Whether a value can survive the journey the manifest puts it through.
+ *
+ * `JSON.stringify` is the probe rather than a hand-written cycle walk because
+ * it is the exact operation that has to succeed later: the manifest is
+ * serialised as JSON, and `canonicalize` recurses over the same structure to
+ * compute the revision id. A recursive YAML anchor — `loop: &a {self: *a}` —
+ * parses into a genuinely circular object, and everything downstream either
+ * throws or exhausts the stack. Catching it here, at the one place that still
+ * knows which file and which key produced it, is what makes the failure
+ * legible.
+ */
+function isSerialisable(value: unknown): boolean {
+  try {
+    JSON.stringify(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Frontmatter, then the first H1, then the filename. */

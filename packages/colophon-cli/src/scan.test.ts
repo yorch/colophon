@@ -315,3 +315,67 @@ describe('scan custom frontmatter', () => {
     });
   });
 });
+
+/**
+ * A recursive YAML anchor parses into a genuinely circular object, and every
+ * downstream step — `JSON.stringify` for storage, `canonicalize` for the
+ * revision id — either throws or exhausts the stack. Before the guard this
+ * surfaced as a bare `RangeError: Maximum call stack size exceeded` naming
+ * neither the file nor the key, on a publish that used to succeed.
+ */
+describe('scan unserialisable frontmatter', () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      made.splice(0).map(path => rm(path, { recursive: true, force: true })),
+    );
+  });
+
+  async function scanOne(frontmatter: string) {
+    await mkdir(TMP_ROOT, { recursive: true });
+    const created = await mkdtemp(join(TMP_ROOT, 'scan-cycle-'));
+    made.push(created);
+    await writeFile(
+      join(created, 'index.md'),
+      `---\n${frontmatter}\n---\n\n# Title\n`,
+    );
+    return scan(created);
+  }
+
+  it('drops a recursive anchor instead of crashing', async () => {
+    const { pages, diagnostics } = await scanOne(
+      ['title: Loop', 'loop: &a', '  self: *a'].join('\n'),
+    );
+
+    expect(pages[0].metadata).toBeUndefined();
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        level: 'warning',
+        path: 'index.md',
+        message: expect.stringContaining('"loop"'),
+      }),
+    );
+  });
+
+  it('keeps the serialisable keys on a page that also has a bad one', async () => {
+    // One unusable key must not cost the page its other metadata.
+    const { pages } = await scanOne(
+      ['title: Loop', 'owner: platform', 'loop: &a', '  self: *a'].join('\n'),
+    );
+
+    expect(pages[0].metadata).toEqual({ owner: 'platform' });
+  });
+
+  it('leaves an ordinary self-referential-looking key alone', async () => {
+    // A non-recursive anchor is perfectly serialisable and must survive.
+    const { pages, diagnostics } = await scanOne(
+      ['title: Fine', 'base: &b', '  team: platform', 'copy: *b'].join('\n'),
+    );
+
+    expect(pages[0].metadata).toEqual({
+      base: { team: 'platform' },
+      copy: { team: 'platform' },
+    });
+    expect(diagnostics).toHaveLength(0);
+  });
+});

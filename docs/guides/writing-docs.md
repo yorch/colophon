@@ -89,7 +89,21 @@ place to look for each.
 
 This is a passthrough and nothing else. Custom keys are not indexed and
 cannot be searched or filtered on; `colophon:search` still narrows by `tags`
-and `type` only.
+and `type` only. They are returned by `colophon:get-page`, not by
+`colophon:list-pages` — the listing stays a cheap index of the whole bundle,
+so an agent reads the metadata of the pages it cares about rather than
+receiving every page's in one response.
+
+Keep values small. Nothing enforces a limit, and whatever you write is stored
+on the page, carried in the manifest, and returned verbatim to an agent — so
+a large value is spent out of that agent's context window every time it reads
+the page. Frontmatter is for facts about the document; prose belongs in the
+document.
+
+One shape does not survive: a **recursive YAML anchor**, which cannot be
+represented as JSON. That key is dropped with a warning naming the file and
+the key, and `--strict` turns the warning into a build failure. Nothing else
+about the page is affected.
 
 ## Two fields that carry more weight than they look
 

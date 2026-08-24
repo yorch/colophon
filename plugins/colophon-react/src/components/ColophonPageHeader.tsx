@@ -13,12 +13,15 @@ export interface ColophonPageHeaderProps {
   /**
    * "View source" target — the same file, not opened for editing.
    *
-   * Offered beside the edit link rather than instead of it because several
-   * providers have no edit URL at all and return the view URL unchanged;
-   * showing both means the reader who only wants to read the Markdown is not
-   * routed through an editor, and the one who wants to edit still can.
-   * Rendered only when it differs from `editUrl`, since on those providers
-   * two links to the same place is noise.
+   * Offered beside the edit link rather than instead of it so a reader who
+   * only wants to read the Markdown is not routed through an editor.
+   *
+   * The equality check below is defensive, not descriptive: every provider
+   * that currently produces links gives a distinct edit URL, so it does not
+   * fire today. It exists because `ScmIntegrationRegistry.resolveEditUrl`
+   * returns its input unchanged for providers with no edit mode, and this
+   * component takes both URLs as plain props — so a caller wiring up such a
+   * provider would otherwise render two identical links.
    */
   sourceUrl?: string;
 }

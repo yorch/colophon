@@ -75,6 +75,20 @@ export function pageSourceLinks(options: {
     return undefined;
   }
 
+  // Every field that becomes a path SEGMENT, checked before any of them is
+  // concatenated. Checking only `pagePath` left the other two able to move
+  // the docs root itself: `source.path: '../../..'` produced a link to the
+  // repository owner's namespace, and `source.ref: 'main/../../..'` did the
+  // same one level down.
+  //
+  // `source.url` is deliberately not here. It is a whole URL rather than a
+  // segment, so the URL constructor normalises any `..` in it before `byUrl`
+  // matches the host — and the host match is the only bound that means
+  // anything, since a publisher can name a different repository outright.
+  if ([pagePath, source.path, source.ref].some(climbsOut)) {
+    return undefined;
+  }
+
   // Trailing slash matters: resolveUrl treats the last segment of a base as a
   // file unless the base ends in one, so without it the docs directory would
   // be replaced by the page path rather than prefixed to it.
@@ -89,19 +103,51 @@ export function pageSourceLinks(options: {
     return undefined;
   }
 
-  // resolveUrl only rejects traversal for paths that start with `/`; a
-  // RELATIVE `../..` is handed to the URL constructor, which walks up
-  // happily. The manifest is written by whoever published the bundle, so a
-  // path that climbs out of the docs root is untrusted input that would
-  // otherwise produce a link to somewhere else in — or above — the
-  // repository. Providers normalise the resolved URL (GitHub rewrites it to
-  // `/tree/`), so the containment check is against the same normalisation
-  // rather than against the raw base.
+  // Backstop for anything the segment checks above did not anticipate —
+  // `resolveUrl` only rejects traversal for paths beginning with `/`, and a
+  // relative `../..` is handed to the URL constructor, which walks up
+  // happily. Providers normalise the resolved URL (GitHub rewrites it to
+  // `/tree/`), so the comparison is against the same normalisation rather
+  // than against the raw base.
   if (!viewUrl.startsWith(scm.resolveUrl({ url: './', base: docsRoot }))) {
     return undefined;
   }
 
   return { viewUrl, editUrl: scm.resolveEditUrl(viewUrl) };
+}
+
+/**
+ * Whether a manifest field would climb out of the docs root once resolved.
+ *
+ * This is a CORRECTNESS guard, not a security boundary, and the distinction
+ * is worth stating because the code looks like the latter. Whoever publishes
+ * a bundle can already point `source.url` at any repository they like — no
+ * traversal required — and `scm.byUrl` bounds the result to a host this
+ * portal is configured to integrate with either way. What this prevents is a
+ * malformed manifest producing a link that looks plausible and goes to the
+ * wrong place, which is the failure nobody reports because it reads as
+ * intentional.
+ *
+ * Decoding first is the point. The WHATWG URL parser leaves `%2f` and `%5c`
+ * alone, so `..%2f..%2f..%2fetc/passwd` stays a single literal segment and
+ * sails through a containment check on the composed string — while a provider
+ * that decodes before routing would see the traversal. A value that will not
+ * decode at all cannot be shown to be safe, so it is refused; a documentation
+ * filename containing a bare `%` is rare enough that losing its link is the
+ * better trade.
+ */
+function climbsOut(value: string): boolean {
+  let decoded = value;
+  let previous: string;
+  do {
+    previous = decoded;
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      return true;
+    }
+  } while (decoded !== previous);
+  return decoded.split(/[/\\]/).some(segment => segment === '..');
 }
 
 /** Joins URL segments with exactly one slash between each. */
