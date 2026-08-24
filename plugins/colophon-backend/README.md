@@ -65,10 +65,11 @@ import { colophonStorageExtensionPoint } from '@brnby/plugin-colophon-backend';
 env.registerInit({
   deps: { colophonStorage: colophonStorageExtensionPoint },
   async init({ colophonStorage }) {
-    colophonStorage.addFactory(
-      'azure',
-      ({ config }) => new AzureBundleStorage(config?.getString('container')),
-    );
+    colophonStorage.addFactory({
+      name: 'azure',
+      factory: ({ config }) =>
+        new AzureBundleStorage(config?.getString('container')),
+    });
   },
 });
 ```

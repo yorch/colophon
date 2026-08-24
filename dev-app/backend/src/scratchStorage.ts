@@ -87,16 +87,19 @@ export const colophonModuleScratchStorage = createBackendModule({
     env.registerInit({
       deps: { colophonStorage: colophonStorageExtensionPoint },
       async init({ colophonStorage }) {
-        colophonStorage.addFactory('scratch', ({ config, logger }) => {
-          // Required rather than defaulted: a store that silently pointed at
-          // the wrong directory is the exact failure this plugin already paid
-          // for once with `storage.local.root`.
-          const directory = config?.getString('directory');
-          if (!directory) {
-            throw new Error('colophon.storage.scratch.directory is required');
-          }
-          logger.info(`scratch storage rooted at ${directory}`);
-          return new ScratchBundleStorage(directory, logger);
+        colophonStorage.addFactory({
+          name: 'scratch',
+          factory: ({ config, logger }) => {
+            // Required rather than defaulted: a store that silently pointed at
+            // the wrong directory is the exact failure this plugin already paid
+            // for once with `storage.local.root`.
+            const directory = config?.getString('directory');
+            if (!directory) {
+              throw new Error('colophon.storage.scratch.directory is required');
+            }
+            logger.info(`scratch storage rooted at ${directory}`);
+            return new ScratchBundleStorage(directory, logger);
+          },
         });
       },
     });

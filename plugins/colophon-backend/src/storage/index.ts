@@ -1,3 +1,4 @@
+export { assertBundleStorage } from './assertBundleStorage';
 export { BundleStorageRegistry } from './BundleStorageRegistry';
 export {
   createBundleStorage,
@@ -11,4 +12,5 @@ export type {
   BundleStorage,
   BundleStorageFactory,
   BundleStorageFactoryOptions,
+  BundleStorageRegistration,
 } from './types';

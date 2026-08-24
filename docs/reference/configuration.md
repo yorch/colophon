@@ -179,6 +179,17 @@ module.
 Nothing falls back to a default. A store named in config and not registered
 stops the backend, rather than resolving to `local` and 404ing every read.
 
+Once resolved, the backend logs which store it is using and — for the two
+built-ins — where that store actually points:
+
+```text
+Colophon bundle storage: type "local"
+Reading bundles from /opt/backstage/colophon-data
+```
+
+The path is resolved against the backend **process**, not against
+`app-config.yaml`, which is the difference that makes this line worth reading.
+
 The sub-config (`storage.azure.*` above) is declared by the module that reads
 it, in its own `config.d.ts`. Backstage merges the schemas each package
 contributes additively, so the merged `colophon.storage` carries the built-in

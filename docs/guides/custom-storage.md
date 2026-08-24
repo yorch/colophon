@@ -70,10 +70,7 @@ an object store can use them unchanged.
 ## 2. Register it from a backend module
 
 ```ts
-import {
-  coreServices,
-  createBackendModule,
-} from '@backstage/backend-plugin-api';
+import { createBackendModule } from '@backstage/backend-plugin-api';
 import { colophonStorageExtensionPoint } from '@brnby/plugin-colophon-backend';
 import { AzureBundleStorage } from './AzureBundleStorage';
 
@@ -84,13 +81,16 @@ export const colophonModuleAzureStorage = createBackendModule({
     env.registerInit({
       deps: { colophonStorage: colophonStorageExtensionPoint },
       async init({ colophonStorage }) {
-        colophonStorage.addFactory('azure', ({ config, logger }) => {
-          const container = config?.getString('container');
-          if (!container) {
-            throw new Error('colophon.storage.azure.container is required');
-          }
-          logger.info(`Colophon bundles in Azure container ${container}`);
-          return new AzureBundleStorage(clientFor(container));
+        colophonStorage.addFactory({
+          name: 'azure',
+          factory: ({ config, logger }) => {
+            const container = config?.getString('container');
+            if (!container) {
+              throw new Error('colophon.storage.azure.container is required');
+            }
+            logger.info(`Colophon bundles in Azure container ${container}`);
+            return new AzureBundleStorage(clientFor(container));
+          },
         });
       },
     });
@@ -111,14 +111,30 @@ a plugin before the plugin itself, so a factory registered here is always in
 place by the time the plugin builds its store. There is no ordering to
 arrange between modules, and no lifecycle hook to hang this on.
 
+`addFactory` takes an object rather than two arguments. It is the extension
+point's own signature, so it is the hardest thing here to change later, and
+`description`, an explicit `override` and a deprecation marker are each free
+to add now and breaking once anyone has called it.
+
 The factory is handed its **own slice** of config — `colophon.storage.azure`,
-so it reads `container`, not `azure.container` — and a logger. It is not
-handed the root config, deliberately: your module can ask for
+so it reads `container`, not `azure.container` — and a logger already tagged
+with your store's name, so its lines are attributable in a production log. It
+is not handed the root config, deliberately: your module can ask for
 `coreServices.rootConfig` in its own `deps` and close over it if it genuinely
 needs something outside its own key.
 
-It may be `async` if setup cannot be deferred, but it runs on the startup
-path, so anything that can be lazy should be.
+It may be `async` if setup cannot be deferred. Be aware of what that costs:
+it is awaited on the startup path with **no timeout**, so a factory that takes
+two seconds delays every plugin by two seconds, and a factory that never
+resolves never starts the backend at all — with another plugin's line last in
+the log. Anything that can be lazy should be.
+
+**If your store holds something that needs closing** — a connection pool, a
+file handle — take `coreServices.rootLifecycle` in your *module's* `deps` and
+register a shutdown hook there. `BundleStorageFactoryOptions` does not carry
+a lifecycle: the store is built once per backend and the module already has
+the service, so a second path to it would only be a second thing to get
+wrong.
 
 **Throw for missing configuration rather than defaulting.** The factory runs
 during backend startup, so a throw is a loud failure at boot with the store
@@ -174,11 +190,27 @@ first read.
 | `type` names nothing registered | Backend stops: `Unknown colophon.storage.type "azur"; registered types are "azure", "local", "s3". Register another with colophonStorageExtensionPoint from a backend module.` |
 | Two modules register the same name | The second one stops the backend: `A colophon.storage factory named "azure" is already registered` |
 | A factory throws | Wrapped, naming the store: `The colophon.storage factory for type "azure" failed; caused by …` |
+| A factory returns something that is not a store | Backend stops: `The colophon.storage factory for type "azure" did not produce a BundleStorage: has() is missing` |
+| `addFactory` runs after the store was built | Backend stops: `A colophon.storage factory named "azure" was registered after the store was built` |
+
+The last two are the ones types do not cover. `has`, `get` and `put` are
+checked on the returned value because a cast through `any`, a JavaScript
+adopter, or an SDK object duck-typed close enough all compile — and without
+the check the backend starts cleanly and fails on the first page anyone opens
+with `storage.get is not a function`, a stack naming neither your factory nor
+the config key that chose it. The late-registration check exists because
+registering from a lifecycle startup hook *is* reachable, and would otherwise
+give you a factory that is present, selectable in config, and used by nothing.
 
 The duplicate check covers `local` and `s3` too — they register through the
 same `addFactory` call before any module runs, so there is one lookup path
 rather than a built-in shortcut and an adopter path that nothing exercises.
 It also means you cannot silently replace `local`; pick another name.
+
+Once the store is resolved the backend logs which one it is —
+`Colophon bundle storage: type "azure"` — and the built-in stores log where
+they resolved to. Do the same in your factory: a rendered page is not
+evidence of *which* store served it.
 
 ## Why a registry and not a `setStorage` seam
 
@@ -201,6 +233,14 @@ had to implement `delete` to satisfy a reader that never calls it. Adding
 `list` and `delete` to the CLI's copy was already a breaking change once for
 anyone who had implemented it; keeping the backend's at three methods is what
 stopped that from being breaking twice.
+
+### Adding a method later
+
+Any method added to the backend's `BundleStorage` in future will be
+**optional**. Every adopter store implements this interface, so a new required
+method breaks all of them at once — which is exactly what adding `list` and
+`delete` did to the CLI's copy. A streaming `getStream` is the obvious
+candidate, and it will arrive optional with `get` as the fallback.
 
 If you want your store on **both** halves — a custom backend reader and
 `colophon gc` against the same bucket — implement both interfaces on one

@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { mockServices } from '@backstage/backend-test-utils';
 import { NotFoundError } from '@backstage/errors';
 import { createBundleStorageRegistry } from './createBundleStorage';
@@ -94,11 +94,14 @@ describe('the storage registry', () => {
 
   it('builds a store from a factory a module registered', async () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('azure', ({ config }) => {
-      // The factory's own slice of config, not the whole storage section —
-      // an adopter reads `container`, never `azure.container`.
-      expect(config?.getString('container')).toBe('docs');
-      return stub;
+    registry.addFactory({
+      name: 'azure',
+      factory: ({ config }) => {
+        // The factory's own slice of config, not the whole storage section —
+        // an adopter reads `container`, never `azure.container`.
+        expect(config?.getString('container')).toBe('docs');
+        return stub;
+      },
     });
 
     const storage = await registry.create({
@@ -112,9 +115,12 @@ describe('the storage registry', () => {
 
   it('hands a factory no config when its section is absent', async () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('memory', ({ config }) => {
-      expect(config).toBeUndefined();
-      return stub;
+    registry.addFactory({
+      name: 'memory',
+      factory: ({ config }) => {
+        expect(config).toBeUndefined();
+        return stub;
+      },
     });
 
     await expect(
@@ -124,7 +130,7 @@ describe('the storage registry', () => {
 
   it('names every registered type when the selected one is unknown', async () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('azure', () => stub);
+    registry.addFactory({ name: 'azure', factory: () => stub });
 
     // The set of valid names depends on which modules this backend installs,
     // so the reader cannot look them up. The error has to carry them.
@@ -137,22 +143,25 @@ describe('the storage registry', () => {
 
   it('refuses a second factory for a name already taken', () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('azure', () => stub);
+    registry.addFactory({ name: 'azure', factory: () => stub });
 
-    expect(() => registry.addFactory('azure', () => stub)).toThrow(
-      'A colophon.storage factory named "azure" is already registered',
-    );
+    expect(() =>
+      registry.addFactory({ name: 'azure', factory: () => stub }),
+    ).toThrow('A colophon.storage factory named "azure" is already registered');
     // Including the built-ins: silently replacing `local` would change where
     // an existing deployment reads from without changing its config.
-    expect(() => registry.addFactory('local', () => stub)).toThrow(
-      'A colophon.storage factory named "local" is already registered',
-    );
+    expect(() =>
+      registry.addFactory({ name: 'local', factory: () => stub }),
+    ).toThrow('A colophon.storage factory named "local" is already registered');
   });
 
   it('names the factory that threw', async () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('azure', () => {
-      throw new NotFoundError('AZURE_STORAGE_KEY is not set');
+    registry.addFactory({
+      name: 'azure',
+      factory: () => {
+        throw new NotFoundError('AZURE_STORAGE_KEY is not set');
+      },
     });
 
     await expect(
@@ -164,10 +173,73 @@ describe('the storage registry', () => {
 
   it('awaits a factory that returns a promise', async () => {
     const registry = createBundleStorageRegistry();
-    registry.addFactory('azure', async () => stub);
+    registry.addFactory({ name: 'azure', factory: async () => stub });
 
     await expect(
       registry.create({ config: configFor({ type: 'azure' }), logger }),
     ).resolves.toBe(stub);
+  });
+
+  it('rejects a factory that returns something that is not a store', async () => {
+    // TypeScript catches the naive version of this and nothing else: a cast
+    // through `any`, a JavaScript adopter, or a duck-typed SDK object all
+    // compile. Without the check the backend STARTS and fails on the first
+    // page anyone opens, with a stack naming neither factory nor config key.
+    const registry = createBundleStorageRegistry();
+    registry.addFactory({
+      name: 'azure',
+      // Through `unknown`, because that is the shape the check exists for:
+      // a value TypeScript would have rejected, reaching runtime anyway.
+      factory: () =>
+        ({ get: async () => Buffer.alloc(0) }) as unknown as BundleStorage,
+    });
+
+    await expect(
+      registry.create({ config: configFor({ type: 'azure' }), logger }),
+    ).rejects.toThrow(
+      'The colophon.storage factory for type "azure" did not produce a BundleStorage: has() is missing',
+    );
+  });
+
+  it('refuses a factory registered after the store was built', async () => {
+    // Reachable: a module can stash the extension point and call it from a
+    // lifecycle startup hook, which runs after the plugin resolved its store.
+    // Accepting it would mean a factory that is present, selectable in
+    // config, and used by nothing.
+    const registry = createBundleStorageRegistry();
+    await registry.create({ config: configFor({ type: 'local' }), logger });
+
+    expect(() =>
+      registry.addFactory({ name: 'late', factory: () => stub }),
+    ).toThrow(
+      'A colophon.storage factory named "late" was registered after the store was built',
+    );
+  });
+
+  it('says which store it resolved, and where local reads from', async () => {
+    // Nothing said so before. `storage.local.root` silently resolving to the
+    // wrong directory is a bug this project has already shipped, and it is
+    // undiagnosable from a log that never names the resolved path.
+    const child = mockServices.logger.mock();
+    const childInfo = jest.spyOn(child, 'info');
+    const childFor = jest.spyOn(logger, 'child').mockReturnValue(child);
+    const info = jest.spyOn(logger, 'info');
+    info.mockClear();
+
+    await createBundleStorageRegistry().create({
+      config: configFor({ type: 'local', local: { directory: './somewhere' } }),
+      logger,
+    });
+
+    expect(info).toHaveBeenCalledWith('Colophon bundle storage: type "local"');
+    // The factory logs through a logger tagged with the store's name, so an
+    // adopter store's lines are attributable in a production log.
+    expect(childFor).toHaveBeenCalledWith({ storage: 'local' });
+    expect(childInfo).toHaveBeenCalledWith(
+      `Reading bundles from ${resolve('./somewhere')}`,
+    );
+
+    childFor.mockRestore();
+    info.mockRestore();
   });
 });

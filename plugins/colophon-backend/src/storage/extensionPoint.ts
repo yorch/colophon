@@ -1,5 +1,5 @@
 import { createExtensionPoint } from '@backstage/backend-plugin-api';
-import type { BundleStorageFactory } from './types';
+import type { BundleStorageRegistration } from './types';
 
 /**
  * Adds a named bundle store to the set `colophon.storage.type` can select.
@@ -24,8 +24,14 @@ export interface ColophonStorageExtensionPoint {
    * Silently replacing a store is the one outcome worth refusing: two modules
    * that both claim a name disagree about where the documentation is, and
    * whichever loses does so by initialisation order.
+   *
+   * Also throws once the store has been built. Registering later is
+   * reachable — a module can stash this and call it from a lifecycle startup
+   * hook, which runs after the plugin has already resolved its store — and
+   * accepting it would mean a factory that is present, selectable in config,
+   * and used by nothing.
    */
-  addFactory(name: string, factory: BundleStorageFactory): void;
+  addFactory(registration: BundleStorageRegistration): void;
 }
 
 /**
@@ -37,13 +43,13 @@ export interface ColophonStorageExtensionPoint {
  *   moduleId: 'azure-storage',
  *   register(env) {
  *     env.registerInit({
- *       deps: { storage: colophonStorageExtensionPoint },
- *       async init({ storage }) {
- *         storage.addFactory(
- *           'azure',
- *           ({ config }) =>
+ *       deps: { colophonStorage: colophonStorageExtensionPoint },
+ *       async init({ colophonStorage }) {
+ *         colophonStorage.addFactory({
+ *           name: 'azure',
+ *           factory: ({ config }) =>
  *             new AzureBundleStorage(config?.getString('container')),
- *         );
+ *         });
  *       },
  *     });
  *   },

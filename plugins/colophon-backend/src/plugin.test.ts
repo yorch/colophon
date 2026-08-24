@@ -227,11 +227,14 @@ describe('a storage factory contributed by a module', () => {
             env.registerInit({
               deps: { colophonStorage: colophonStorageExtensionPoint },
               async init({ colophonStorage }) {
-                colophonStorage.addFactory('memory', ({ config }) => {
-                  // The factory gets its OWN slice of config, not the whole
-                  // storage section.
-                  expect(config?.getString('label')).toBe('adopter');
-                  return storage;
+                colophonStorage.addFactory({
+                  name: 'memory',
+                  factory: ({ config }) => {
+                    // The factory gets its OWN slice of config, not the whole
+                    // storage section.
+                    expect(config?.getString('label')).toBe('adopter');
+                    return storage;
+                  },
                 });
               },
             });

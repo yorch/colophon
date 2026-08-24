@@ -43,6 +43,7 @@ export type {
   BundleStorage,
   BundleStorageFactory,
   BundleStorageFactoryOptions,
+  BundleStorageRegistration,
   ColophonStorageExtensionPoint,
 } from './storage';
 export { colophonStorageExtensionPoint } from './storage';

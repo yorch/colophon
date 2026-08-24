@@ -26,11 +26,11 @@ export const colophonModuleAzureStorage = createBackendModule({
     env.registerInit({
       deps: { colophonStorage: colophonStorageExtensionPoint },
       async init({ colophonStorage }) {
-        colophonStorage.addFactory(
-          'azure',
-          ({ config }) =>
+        colophonStorage.addFactory({
+          name: 'azure',
+          factory: ({ config }) =>
             new AzureBundleStorage(config?.getString('container')),
-        );
+        });
       },
     });
   },
@@ -58,7 +58,16 @@ cannot silently replace `local`.
 
 Newly exported from the package's single entry point (there is no `/alpha`
 subpath): `colophonStorageExtensionPoint`, `ColophonStorageExtensionPoint`,
-`BundleStorage`, `BundleStorageFactory`, `BundleStorageFactoryOptions`.
+`BundleStorage`, `BundleStorageFactory`, `BundleStorageFactoryOptions`,
+`BundleStorageRegistration`.
+
+`addFactory` and the factory both take an options object rather than
+positional arguments. This is the extension point's own signature and the
+hardest thing in the package to change later, and `description`, an explicit
+`override` and a deprecation marker are each free to add now and breaking once
+anyone has called it. **Any method added to `BundleStorage` in future will be
+optional** — a new required method would break every adopter store at once,
+which is precisely what adding `list` and `delete` did to the CLI's copy.
 
 *What an adopter gains:* a three-method interface — `has`, `get`, `put` — and
 a factory that is handed its own slice of config plus a logger. Not the root
@@ -74,7 +83,18 @@ the set is open and the reader cannot look it up:
 Register another with colophonStorageExtensionPoint from a backend module.`
 A second factory for a taken name throws
 `A colophon.storage factory named "local" is already registered`, naming the
-module that lost. A factory that throws is wrapped with the store's name.
+module that lost. A factory that throws is wrapped with the store's name. A
+factory that returns something that is not a store is refused at startup too —
+types catch the naive case and not a cast through `any`, a JavaScript adopter
+or a duck-typed SDK object, and without the check that store starts the backend
+and fails on the first page opened. Registering after the store has been built
+is refused rather than accepted and ignored.
+
+*The backend now says where it reads from.* One line naming the resolved type,
+and for the built-ins the resolved absolute directory or `s3://bucket/prefix`.
+Nothing said so before, and `storage.local.root` silently resolving to the
+wrong directory is a bug this project has already shipped. Each factory is
+handed a logger tagged with its store's name.
 
 *The config schema.* `colophon.storage.type` was `'local' | 's3'` and is now
 `string`. It cannot stay an enum: an enum would reject every adopter's own

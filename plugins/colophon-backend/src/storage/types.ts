@@ -14,6 +14,12 @@ import type { Config } from '@backstage/config';
  * store that does not ship with it. It is NOT the CLI's `BundleStorage` —
  * that one also has `list` and `delete`, which only the publisher needs. See
  * `docs/guides/custom-storage.md` for why the two stay separate.
+ *
+ * **Evolution policy: any method added here in future will be optional.**
+ * Every adopter store implements this interface, so a new required method
+ * breaks all of them at once — which is exactly what adding `list` and
+ * `delete` did to the CLI's copy. A streaming `getStream` is the obvious
+ * candidate, and it will arrive optional with `get` as the fallback.
  */
 export interface BundleStorage {
   has(key: string): Promise<boolean>;
@@ -44,6 +50,7 @@ export interface BundleStorageFactoryOptions {
    * failure is loud and immediate instead of a 404 on the first read.
    */
   config?: Config;
+  /** Tagged with the store's name, so its lines are attributable in production. */
   logger: LoggerService;
 }
 
@@ -52,9 +59,28 @@ export interface BundleStorageFactoryOptions {
  *
  * Allowed to be async so a factory can do setup that genuinely cannot be
  * deferred — reading a credential file, resolving a token. Anything that can
- * be lazy should be: this runs on the startup path and a slow factory delays
- * the whole backend.
+ * be lazy should be, and the reason is stronger than tidiness: this is
+ * awaited on the startup path with no timeout, so a factory that takes two
+ * seconds delays every plugin by two seconds, and a factory that never
+ * resolves never starts the backend at all.
  */
 export type BundleStorageFactory = (
   options: BundleStorageFactoryOptions,
 ) => BundleStorage | Promise<BundleStorage>;
+
+/**
+ * One store offered to `colophon.storage.type`.
+ *
+ * An options object for the same reason `BundleStorageFactoryOptions` is one,
+ * and the reason applies harder here: this is the extension point's own
+ * method, so its signature is the hardest thing in the package to change
+ * later. `description`, an explicit `override`, a deprecation marker are each
+ * free to add now and a breaking change once anyone has called it. Backstage's
+ * closest analogue — `AuthProvidersExtensionPoint.registerProvider` — takes an
+ * object for exactly two fields.
+ */
+export interface BundleStorageRegistration {
+  /** The value `colophon.storage.type` must carry to select this store. */
+  name: string;
+  factory: BundleStorageFactory;
+}

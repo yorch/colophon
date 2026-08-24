@@ -5,7 +5,11 @@ import type {
 } from '@backstage/backend-plugin-api';
 import { readColophonConfig } from '../config';
 import { ColophonDatabase } from '../database';
-import { type BundleStorage, createBundleStorage } from '../storage';
+import {
+  assertBundleStorage,
+  type BundleStorage,
+  createBundleStorage,
+} from '../storage';
 import { ColophonService } from './ColophonService';
 
 /**
@@ -32,7 +36,18 @@ export async function createColophonService(options: {
   const { chunking, retention } = readColophonConfig(options.config);
   return new ColophonService({
     db: await ColophonDatabase.create({ database: options.database }),
-    storage: options.storage ?? (await createBundleStorage(options)),
+    // `in` rather than `??`. The plugin ALWAYS passes a store, so an
+    // undefined here is a bug — and `??` would answer that bug by silently
+    // rebuilding from a fresh, BUILT-INS-ONLY registry, telling an operator
+    // whose module registered `azure` that the registered types are
+    // "local", "s3" and to register the thing they already registered.
+    storage:
+      'storage' in options
+        ? assertBundleStorage(
+            options.storage,
+            'The storage given to createColophonService',
+          )
+        : await createBundleStorage(options),
     logger: options.logger,
     chunking,
     retention,
