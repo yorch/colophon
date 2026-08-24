@@ -56,6 +56,15 @@ search:
 
 colophon:
   storage:
+    # Stays on a built-in so the harness keeps exercising the shipped path.
+    # dev-app/backend/src/scratchStorage.ts registers a third store through
+    # colophonStorageExtensionPoint; select it from a gitignored
+    # app-config.local.yaml with:
+    #
+    #   colophon:
+    #     storage:
+    #       type: scratch
+    #       scratch: { directory: ../../colophon-data }
     type: local
     local:
       # Relative to the BACKEND's working directory (dev-app/backend), not

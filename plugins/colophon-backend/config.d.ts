@@ -51,12 +51,29 @@ export interface Config {
      * Where published bundles are read from. Omitted entirely, this is a
      * `local` store under ./colophon-storage — a development default, not a
      * deployment one.
+     *
+     * Only the built-in stores are declared here. A backend module that
+     * registers its own factory through `colophonStorageExtensionPoint`
+     * declares its own key — `colophon.storage.azure`, say — in its own
+     * `config.d.ts`. Backstage merges the schemas every package contributes
+     * additively, so both sets of keys end up on this one object and
+     * `config:check --strict` still rejects a misspelling of either.
      */
     storage?: {
       /**
+       * Names a registered store. `local` and `s3` ship with the plugin;
+       * a backend module adds more.
+       *
+       * Not an enum, and it cannot be one: the set is open, so a schema that
+       * listed the built-ins would reject every adopter's own name outright.
+       * Validation moves to startup instead, where the plugin knows which
+       * factories this backend actually installed and can name them — a name
+       * nothing registered fails there, loudly, rather than falling back to a
+       * default that would 404 on every read.
+       *
        * @default "local"
        */
-      type?: 'local' | 's3';
+      type?: string;
 
       local?: {
         /**

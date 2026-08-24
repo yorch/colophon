@@ -15,7 +15,8 @@
  * subpath: this package declares no `exports` map, so a subpath import does
  * not resolve. `backend.add` also takes a feature or a promise of a module
  * NAMESPACE, not a promise of a feature, so the static import is both shorter
- * and the only shape that type-checks.
+ * and the only shape that type-checks. The same applies to
+ * `colophonStorageExtensionPoint` — everything public lives here.
  */
 
 export type { ColophonConfig } from './config';
@@ -38,3 +39,11 @@ export type {
 } from './service/ColophonService';
 export { ColophonService } from './service/ColophonService';
 export { createColophonService } from './service/createColophonService';
+export type {
+  BundleStorage,
+  BundleStorageFactory,
+  BundleStorageFactoryOptions,
+  BundleStorageRegistration,
+  ColophonStorageExtensionPoint,
+} from './storage';
+export { colophonStorageExtensionPoint } from './storage';
