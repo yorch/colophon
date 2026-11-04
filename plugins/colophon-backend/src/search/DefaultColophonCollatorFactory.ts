@@ -55,6 +55,27 @@ interface EntityLink {
 const PAGE_SIZE = 200;
 
 /**
+ * Two chunks are one section when they share everything a Backstage location
+ * is built from. Chunks of one section are adjacent in the `/indexable`
+ * ordering (bundle, slug, ordinal), so comparing with the open group is enough.
+ */
+function sameSection(a: IndexableRow, b: IndexableRow): boolean {
+  return (
+    a.bundle_id === b.bundle_id &&
+    a.channel === b.channel &&
+    a.slug === b.slug &&
+    a.anchor === b.anchor
+  );
+}
+
+function linksFor(
+  linksByBundle: Map<string, EntityLink[]>,
+  row: IndexableRow,
+): EntityLink[] {
+  return linksByBundle.get(row.bundle_id) ?? [];
+}
+
+/**
  * Projects Colophon chunks into Backstage Search.
  *
  * Reads over HTTP rather than from the database, and that is not incidental:
@@ -70,8 +91,16 @@ const PAGE_SIZE = 200;
  *
  *  - only the DEFAULT channel, so a bundle with `latest`, `1.x` and `pr-42`
  *    does not return the same page three times;
- *  - one document per CHUNK, not per page, so a result lands on the heading
- *    that actually answered the query.
+ *  - one document per SECTION (a heading's anchor), not per page, so a result
+ *    lands on the heading that actually answered the query.
+ *
+ * The second rule is also forced by Backstage's Lunr engine, which keys every
+ * document by `location`. Two chunks of one long section share a location, so
+ * one document per chunk made the engine merge their match positions onto a
+ * single stored text. Its highlight splicing then wrapped the wrong byte
+ * ranges, which is where the mid-word highlights and the leaked `<uuid>` tags
+ * in search results came from. Chunks of one section are contiguous in the
+ * `/indexable` ordering, so grouping them here is a single pass.
  */
 export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
   readonly type = COLOPHON_DOCUMENT_TYPE;
@@ -120,6 +149,10 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
 
     let offset = 0;
     let total = 0;
+    // A section can straddle a page boundary, so the open group is carried
+    // across pages and only flushed once a different section begins.
+    let section: IndexableRow[] = [];
+    let linksByBundle = new Map<string, EntityLink[]>();
     do {
       const response = await fetch(
         `${baseUrl}/indexable?offset=${offset}&limit=${PAGE_SIZE}`,
@@ -139,8 +172,8 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
       total = body.total;
 
       // Narrowed and ordered once per page of results rather than per chunk,
-      // and most-specific-first so the per-chunk step is a find.
-      const linksByBundle = new Map<string, EntityLink[]>();
+      // and most-specific-first so the per-section step is a find.
+      linksByBundle = new Map<string, EntityLink[]>();
       for (const link of body.links) {
         const group = linksByBundle.get(link.bundleId) ?? [];
         group.push(link);
@@ -153,7 +186,11 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
       }
 
       for (const row of body.rows) {
-        yield this.#toDocument(row, linksByBundle.get(row.bundle_id) ?? []);
+        if (section.length > 0 && !sameSection(section[0], row)) {
+          yield this.#toDocument(section, linksFor(linksByBundle, section[0]));
+          section = [];
+        }
+        section.push(row);
       }
 
       offset += PAGE_SIZE;
@@ -161,10 +198,16 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
       // pass picks them up rather than this one paging forever.
     } while (offset < total);
 
+    if (section.length > 0) {
+      yield this.#toDocument(section, linksFor(linksByBundle, section[0]));
+    }
+
     this.#logger.info(`Colophon collated ${total} chunks for search`);
   }
 
-  #toDocument(row: IndexableRow, links: EntityLink[]): ColophonDocument {
+  /** One document for every chunk of one section, in document order. */
+  #toDocument(rows: IndexableRow[], links: EntityLink[]): ColophonDocument {
+    const row = rows[0];
     const breadcrumb = JSON.parse(row.breadcrumb) as string[];
     // The most specific entity wins: a monorepo bundle carries several, each
     // scoped to a subtree, and the deep link should land on the entity a
@@ -178,7 +221,10 @@ export class DefaultColophonCollatorFactory implements DocumentCollatorFactory {
       // Plain text, not the stored markdown: this is the snippet a person
       // reads in the portal. The MCP tools keep the markdown, because an
       // agent wants the table rather than a flattening of it.
-      text: plainText(row.text),
+      text: rows
+        .map(chunk => plainText(chunk.text))
+        .filter(text => text.length > 0)
+        .join('\n'),
       location: pagePath({
         appPath: this.#appPath,
         bundleId: row.bundle_id,

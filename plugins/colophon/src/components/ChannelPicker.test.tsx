@@ -1,6 +1,6 @@
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { ChannelInfo, ColophonApi } from '../api';
 import { colophonApiRef } from '../api';
 import { ChannelPicker } from './ChannelPicker';
@@ -30,16 +30,17 @@ function apiStub(channels: ChannelInfo[]): ColophonApi {
 }
 
 describe('ChannelPicker', () => {
-  it('renders nothing for a bundle with a single channel', async () => {
-    const { container } = await renderInTestApp(
+  it('shows the current version as plain text for a single channel', async () => {
+    await renderInTestApp(
       <TestApiProvider apis={[[colophonApiRef, apiStub([channel()])]]}>
         <ChannelPicker bundleId="b" current="latest" onChange={jest.fn()} />
       </TestApiProvider>,
     );
 
-    // Give the channel list effect a chance to resolve before asserting.
-    await waitFor(() => expect(container).toBeInTheDocument());
-    expect(container).toBeEmptyDOMElement();
+    // A select with one option is noise, but which version this is still
+    // matters — it used to disappear entirely.
+    expect(await screen.findByText('Version: latest')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('renders a picker once a bundle has more than one channel', async () => {

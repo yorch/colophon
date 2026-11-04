@@ -6,7 +6,7 @@ import { defaultSchema } from 'rehype-sanitize';
  *
  * Bundles are published from arbitrary repositories, so the rendered tree is
  * untrusted input. This schema is deliberately an EXTENSION of GitHub's
- * default allow-list rather than a replacement: it adds the three things the
+ * default allow-list rather than a replacement: it adds the few things the
  * renderer genuinely needs and nothing else. If a future feature needs another
  * tag or attribute, add it here.
  *
@@ -19,9 +19,12 @@ import { defaultSchema } from 'rehype-sanitize';
  */
 
 const attributes = defaultSchema.attributes ?? {};
+const tagNames = defaultSchema.tagNames ?? [];
 
 export const colophonSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
+  /** `aside` is what a GitHub-style callout becomes (see remarkCallouts). */
+  tagNames: [...tagNames, 'aside'],
   attributes: {
     ...attributes,
     /**
@@ -36,6 +39,20 @@ export const colophonSanitizeSchema: SanitizeSchema = {
     ],
     /** remark-gfm marks task-list items with this class. */
     li: [...(attributes.li ?? []), ['className', 'task-list-item']],
+    /**
+     * Callouts. Both patterns are anchored and enumerate the five kinds, so
+     * page content cannot choose an arbitrary class or role: the only way to
+     * reach this element at all is through the remark step, because raw HTML
+     * never gets past the sanitiser.
+     */
+    aside: [
+      ['role', 'note'],
+      [
+        'className',
+        /^colophon-callout(?:-(?:note|tip|important|warning|caution))?$/,
+      ],
+    ],
+    div: [...(attributes.div ?? []), ['className', 'colophon-callout-title']],
     /** remark-gfm renders task-list checkboxes as checked, disabled inputs. */
     input: [...(attributes.input ?? []), ['type', 'checkbox'], 'checked'],
   },

@@ -102,7 +102,7 @@ function ResolvedLink({ href, title, children }: LinkProps) {
     // Left as a plain fragment so the browser scrolls natively. Routing it
     // would resolve the anchor against the current path instead.
     return (
-      <a className="colophon-toc-link" href={resolved.href} title={title}>
+      <a className="colophon-link" href={resolved.href} title={title}>
         {children}
       </a>
     );
@@ -178,15 +178,21 @@ function useResolvingComponents(): ColophonComponents {
 export interface PageMarkdownProps {
   context: MarkdownContext;
   content: string;
+  /** Lets the renderer drop a leading h1 that merely repeats the header. */
+  pageTitle?: string;
 }
 
 /** One page of markdown, with its relative references resolvable. */
-export function PageMarkdown({ context, content }: PageMarkdownProps) {
+export function PageMarkdown({
+  context,
+  content,
+  pageTitle,
+}: PageMarkdownProps) {
   const components = useResolvingComponents();
   return (
     <MarkdownPageContext.Provider value={context}>
       <ColophonComponentsProvider components={components}>
-        <ColophonMarkdown content={content} />
+        <ColophonMarkdown content={content} pageTitle={pageTitle} />
       </ColophonComponentsProvider>
     </MarkdownPageContext.Provider>
   );

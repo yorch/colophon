@@ -8,12 +8,27 @@
       name="description"
       content="Annotate a catalog entity, publish a docs tree from CI, and configure the Colophon backend: storage, retention, chunking, indexing schedule and MCP exposure."
     />
+    <link rel="canonical" href="https://yorch.github.io/colophon/getting-started.html" />
+    <meta property="og:site_name" content="Colophon" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Getting started — Colophon" />
+    <meta property="og:description" content="Annotate a catalog entity, publish a docs tree from CI, and configure the Colophon backend: storage, retention, chunking, indexing schedule and MCP exposure." />
+    <meta property="og:url" content="https://yorch.github.io/colophon/getting-started.html" />
+    <meta property="og:image" content="https://yorch.github.io/colophon/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Colophon: Markdown documentation for the Backstage catalog" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Getting started — Colophon" />
+    <meta name="twitter:description" content="Annotate a catalog entity, publish a docs tree from CI, and configure the Colophon backend: storage, retention, chunking, indexing schedule and MCP exposure." />
+    <meta name="twitter:image" content="https://yorch.github.io/colophon/assets/og.png" />
     <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
     />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <script>
       // Runs before the stylesheet paints, so a stored choice never shows a
       // flash of the other theme. Deliberately inline and blocking: a
@@ -46,10 +61,10 @@
         <nav class="site-nav" aria-label="Primary">
           <ul>
             <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html" aria-current="page">Getting started</a></li>
             <li><a href="architecture.html">Architecture</a></li>
             <li><a href="implementation.html">Implementation</a></li>
             <li><a href="agents.html">For agents</a></li>
-            <li><a href="getting-started.html" aria-current="page">Getting started</a></li>
           </ul>
         </nav>
         <a
@@ -64,6 +79,7 @@
           class="theme-toggle"
           type="button"
           data-theme-toggle
+          hidden
           title="Switch theme"
         >
           <svg class="icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg>
@@ -90,9 +106,22 @@
             schema version bump, so pin exact versions if you depend on them.
           </p>
 
+          <details class="toc" open data-collapse-narrow>
+            <summary>On this page</summary>
+            <nav aria-label="On this page">
+              <ol>
+                <li><a href="#annotate"><span class="toc-n">01</span> Link the entity to a bundle</a></li>
+                <li><a href="#publish"><span class="toc-n">02</span> Publish from CI</a></li>
+                <li><a href="#configure"><span class="toc-n">03</span> Install and configure</a></li>
+                <li><a href="#authoring"><span class="toc-n">04</span> Writing docs that retrieve well</a></li>
+                <li><a href="#local"><span class="toc-n">05</span> Working on Colophon itself</a></li>
+              </ol>
+            </nav>
+          </details>
+
           <!-- ---------------------------------------------- 01 annotation -->
           <section class="section" id="annotate" aria-labelledby="annotate-h">
-            <p class="eyebrow">01</p>
+            <p class="eyebrow">01 — Annotate</p>
             <h2 id="annotate-h">Link the entity to a bundle</h2>
             <p>
               One annotation in <code>catalog-info.yaml</code>. The value is a bundle id —
@@ -131,7 +160,7 @@
 
           <!-- ------------------------------------------------- 02 publish -->
           <section class="section" id="publish" aria-labelledby="publish-h">
-            <p class="eyebrow">02</p>
+            <p class="eyebrow">02 — Publish</p>
             <h2 id="publish-h">Publish from CI</h2>
             <p>
               The publisher scans the directory, validates it, assembles a manifest, uploads
@@ -197,7 +226,7 @@
 
           <!-- -------------------------------------------------- 03 config -->
           <section class="section" id="configure" aria-labelledby="configure-h">
-            <p class="eyebrow">03</p>
+            <p class="eyebrow">03 — Configure</p>
             <h2 id="configure-h">Install and configure</h2>
             <p>
               Two packages, one for each workspace of a Backstage app.
@@ -279,6 +308,7 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
 
             <div class="table-wrap bleed">
               <table>
+                <caption class="sr-only">The colophon app-config keys: whether each is required, its default and notes</caption>
                 <thead>
                   <tr>
                     <th scope="col">Key</th>
@@ -362,7 +392,7 @@ const app = createApp({ features: [colophonPlugin] });</code></pre>
 
           <!-- ------------------------------------------------- 04 authoring -->
           <section class="section" id="authoring" aria-labelledby="authoring-h">
-            <p class="eyebrow">04</p>
+            <p class="eyebrow">04 — Authoring</p>
             <h2 id="authoring-h">Writing docs that retrieve well</h2>
 
             <figure class="code bleed">
@@ -463,38 +493,41 @@ nav:                      <span class="cm"># when present, wins over the directo
 
           <!-- ----------------------------------------------------- 05 dev -->
           <section class="section" id="local" aria-labelledby="local-h">
-            <p class="eyebrow">05</p>
+            <p class="eyebrow">05 — For contributors</p>
             <h2 id="local-h">Working on Colophon itself</h2>
-            <p>Node 22 or 24, and Yarn 4 via corepack.</p>
+            <details class="fold">
+              <summary>Contributor setup: build, lint and test locally</summary>
+              <p>Node 22 or 24, and Yarn 4 via corepack.</p>
 
-            <figure class="code bleed">
-              <figcaption>shell</figcaption>
-              <pre><code>corepack enable
-yarn install
-yarn verify        <span class="cm"># lint + arch lint + site lint + typecheck + test</span></code></pre>
-            </figure>
+              <figure class="code bleed">
+                <figcaption>shell</figcaption>
+                <pre><code>corepack enable
+  yarn install
+  yarn verify        <span class="cm"># lint + arch lint + site lint + typecheck + test</span></code></pre>
+              </figure>
 
-            <p>
-              Biome owns all formatting and general linting. ESLint is kept for exactly one
-              job — <code>plugin:@backstage/recommended</code>, seven monorepo
-              dependency-hygiene rules with no stylistic content — so the two tools cannot
-              conflict. Do not add stylistic rules to <code>.eslintrc.js</code>.
-            </p>
-            <p>
-              For a local end-to-end loop, publish to a directory instead of a bucket with
-              <code>--storage local --local-dir ./colophon-data</code> and point
-              <code>colophon.storage.local.directory</code> at the same path.
-            </p>
+              <p>
+                Biome owns all formatting and general linting. ESLint is kept for exactly one
+                job — <code>plugin:@backstage/recommended</code>, seven monorepo
+                dependency-hygiene rules with no stylistic content — so the two tools cannot
+                conflict. Do not add stylistic rules to <code>.eslintrc.js</code>.
+              </p>
+              <p>
+                For a local end-to-end loop, publish to a directory instead of a bucket with
+                <code>--storage local --local-dir ./colophon-data</code> and point
+                <code>colophon.storage.local.directory</code> at the same path.
+              </p>
+            </details>
           </section>
 
           <nav class="pager bleed" aria-label="Page navigation">
-            <a href="agents.html">
-              <span class="eyebrow" style="display: block">Previous</span>
-              ← For agents
-            </a>
             <a href="index.html">
-              <span class="eyebrow" style="display: block">Back to</span>
-              Overview →
+              <span class="eyebrow">Previous</span>
+              ← Overview
+            </a>
+            <a href="architecture.html">
+              <span class="eyebrow">Next</span>
+              Architecture →
             </a>
           </nav>
         </article>
@@ -518,5 +551,6 @@ yarn verify        <span class="cm"># lint + arch lint + site lint + typecheck +
       </div>
     </footer>
     <script src="assets/theme.js" defer></script>
+    <script src="assets/enhance.js" defer></script>
   </body>
 </html>

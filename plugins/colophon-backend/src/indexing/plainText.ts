@@ -9,26 +9,49 @@ const parser = unified().use(remarkParse).use(remarkGfm);
 interface AstNode {
   type: string;
   value?: string;
+  lang?: string | null;
   children?: AstNode[];
 }
 
 /**
+ * Fences whose body is diagram source rather than text a reader types. A
+ * mermaid block indexed verbatim becomes the snippet for its whole section,
+ * which is the first thing a search result shows and says nothing about the
+ * page. The MCP tools keep the source; search does not need it.
+ */
+const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'dot', 'd2']);
+
+/**
  * Blocks that are a unit of prose. Everything else is a container to descend
- * through, so a list item's paragraph and a table's cells each become their
- * own run of text rather than one run of the whole structure.
+ * through, so a list item's paragraph becomes its own run of text.
  */
 function collect(node: AstNode, into: string[]): void {
   switch (node.type) {
-    case 'code':
-      // Kept, not dropped: config keys and command names live in fenced
-      // blocks, and those are exactly what someone types into a search box.
+    case 'code': {
+      if (DIAGRAM_LANGUAGES.has(node.lang?.toLowerCase() ?? '')) {
+        return;
+      }
+      // Ordinary code is kept whole: config keys and command names live in
+      // fences, and those are what someone types into a search box.
       if (node.value?.trim()) {
         into.push(node.value.trim());
       }
       return;
+    }
+    case 'tableRow': {
+      // One line per row, cells joined with a visible separator. Cells on
+      // their own lines collapse into a run-on sentence once a snippet is
+      // rendered, and the separator is what keeps "Key" and "Default" apart.
+      const cells = (node.children ?? [])
+        .map(cell => mdastToString(cell).trim())
+        .filter(text => text.length > 0);
+      if (cells.length > 0) {
+        into.push(cells.join(' · '));
+      }
+      return;
+    }
     case 'paragraph':
-    case 'heading':
-    case 'tableCell': {
+    case 'heading': {
       const text = mdastToString(node).trim();
       if (text) {
         into.push(text);

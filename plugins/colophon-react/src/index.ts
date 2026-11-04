@@ -17,8 +17,10 @@ export type {
   ColophonSearchResultsProps,
 } from './components/ColophonSearchResults';
 export { ColophonSearchResults } from './components/ColophonSearchResults';
+export type { ColophonSkeletonProps } from './components/ColophonSkeleton';
+export { ColophonSkeleton } from './components/ColophonSkeleton';
 export type { ColophonTocProps } from './components/ColophonToc';
-export { ColophonToc } from './components/ColophonToc';
+export { ColophonToc, tocEntries } from './components/ColophonToc';
 export { MermaidDiagram } from './components/MermaidDiagram';
 export {
   defaultCodeLanguages,
@@ -44,6 +46,8 @@ export {
   COLOPHON_STYLE_ELEMENT_ID,
   COLOPHON_STYLE_LAYER,
   ensureColophonStyles,
+  NAV_BREAKPOINT_REM,
+  TOC_BREAKPOINT_REM,
   useColophonStyles,
 } from './styles';
 export type {

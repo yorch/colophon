@@ -21,7 +21,7 @@ describe('ColophonPageHeader', () => {
     expect(
       screen.getByText('How to rotate the payments API signing key.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('how-to')).toBeInTheDocument();
+    expect(screen.getByText('How-to')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Edit this page' }),
     ).toHaveAttribute(

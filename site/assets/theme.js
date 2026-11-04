@@ -69,6 +69,10 @@
   };
 
   if (button) {
+    // The markup ships `hidden`: without JS the button could only sit there
+    // doing nothing, and a control that looks live but is inert is worse than
+    // no control (the system preference still applies on its own).
+    button.hidden = false;
     button.addEventListener('click', () => {
       apply(ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length]);
     });

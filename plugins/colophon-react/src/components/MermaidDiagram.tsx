@@ -1,6 +1,7 @@
 import { appThemeApiRef, useApiHolder } from '@backstage/core-plugin-api';
 import { Text } from '@backstage/ui';
 import { useEffect, useId, useState } from 'react';
+import { useColophonStyles } from '../styles';
 import type { CodeBlockProps } from '../types';
 
 /**
@@ -19,7 +20,7 @@ import type { CodeBlockProps } from '../types';
 type RenderState =
   | { status: 'rendering' }
   | { status: 'ok'; svg: string }
-  | { status: 'failed'; message: string };
+  | { status: 'failed' };
 
 /** Resolves the app's current light/dark variant, if an app theme is present. */
 export function useThemeVariant(): 'light' | 'dark' {
@@ -61,7 +62,27 @@ function resolveVariant(themeId: string | undefined): 'light' | 'dark' {
     : 'light';
 }
 
+/**
+ * Removes whatever mermaid left in the document after a failed render.
+ *
+ * `render()` builds its SVG in a detached-looking scratch element appended to
+ * `<body>` (`#d<id>`) and removes it only on success. On a syntax error it
+ * stays, error "bomb" and all, positioned over the page — outside this
+ * component, so nothing React owns can clear it.
+ */
+function removeLeakedRenderElements(renderId: string) {
+  for (const id of [renderId, `d${renderId}`, `i${renderId}`]) {
+    document.getElementById(id)?.remove();
+  }
+}
+
+/** `graph TD;` -> "graph", for a screen reader's idea of what this image is. */
+function diagramKind(source: string): string {
+  return /^\s*([A-Za-z][\w-]*)/.exec(source)?.[1] ?? 'diagram';
+}
+
 export function MermaidDiagram(props: CodeBlockProps) {
+  useColophonStyles();
   const { value } = props;
   const themeVariant = useThemeVariant();
   // `useId` gives mermaid a DOM-safe unique id per instance; mermaid rejects
@@ -79,17 +100,21 @@ export function MermaidDiagram(props: CodeBlockProps) {
         startOnLoad: false,
         securityLevel: 'strict',
         theme: themeVariant === 'dark' ? 'dark' : 'default',
+        // Without this a syntax error renders mermaid's own error graphic into
+        // the page instead of throwing; the fallback below is ours to draw.
+        suppressErrorRendering: true,
       });
+      // Parse first so an invalid diagram fails before render() has built
+      // anything to leak.
+      await mermaid.parse(value);
       const { svg } = await mermaid.render(renderId, value);
       if (!cancelled) {
         setState({ status: 'ok', svg });
       }
-    })().catch((error: unknown) => {
+    })().catch(() => {
+      removeLeakedRenderElements(renderId);
       if (!cancelled) {
-        setState({
-          status: 'failed',
-          message: error instanceof Error ? error.message : String(error),
-        });
+        setState({ status: 'failed' });
       }
     });
 
@@ -102,13 +127,19 @@ export function MermaidDiagram(props: CodeBlockProps) {
     // A broken diagram must never take the page with it: fall back to the
     // source, which is still the most useful thing we can show the reader.
     return (
-      <figure className="colophon-mermaid" data-testid="mermaid-fallback">
+      <figure
+        className="colophon-mermaid colophon-mermaid-fallback"
+        data-testid="mermaid-fallback"
+      >
         <pre className="colophon-code-block">
           <code>{value}</code>
         </pre>
+        {/* Deliberately not the parser's message: it is a multi-line dump
+            about a grammar the author may never have seen, and not a reason
+            to colour the page red. The source above is the useful part. */}
         <figcaption>
-          <Text variant="body-small" color="danger">
-            {`Could not render diagram: ${state.message}`}
+          <Text variant="body-small" color="secondary">
+            This diagram could not be rendered, so its source is shown instead.
           </Text>
         </figcaption>
       </figure>
@@ -117,7 +148,12 @@ export function MermaidDiagram(props: CodeBlockProps) {
 
   if (state.status === 'rendering') {
     return (
-      <div className="colophon-mermaid" data-testid="mermaid-rendering">
+      <div
+        className="colophon-mermaid colophon-mermaid-pending"
+        data-testid="mermaid-rendering"
+        role="status"
+        aria-busy="true"
+      >
         <Text variant="body-small" color="secondary">
           Rendering diagram…
         </Text>
@@ -129,6 +165,8 @@ export function MermaidDiagram(props: CodeBlockProps) {
     <div
       className="colophon-mermaid"
       data-testid="mermaid-diagram"
+      role="img"
+      aria-label={`Diagram (${diagramKind(value)})`}
       // Mermaid returns an SVG string and offers no element-returning API. The
       // input reaching it is already sanitised by the markdown pipeline, and
       // mermaid itself runs with securityLevel 'strict', which strips scripts

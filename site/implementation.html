@@ -8,12 +8,27 @@
       name="description"
       content="The Colophon bundle contract with a real manifest, how revision identity is computed, the chunking rules, and the five packages that negotiate through them."
     />
+    <link rel="canonical" href="https://yorch.github.io/colophon/implementation.html" />
+    <meta property="og:site_name" content="Colophon" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Implementation — Colophon" />
+    <meta property="og:description" content="The Colophon bundle contract with a real manifest, how revision identity is computed, the chunking rules, and the five packages that negotiate through them." />
+    <meta property="og:url" content="https://yorch.github.io/colophon/implementation.html" />
+    <meta property="og:image" content="https://yorch.github.io/colophon/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Colophon: Markdown documentation for the Backstage catalog" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Implementation — Colophon" />
+    <meta name="twitter:description" content="The Colophon bundle contract with a real manifest, how revision identity is computed, the chunking rules, and the five packages that negotiate through them." />
+    <meta name="twitter:image" content="https://yorch.github.io/colophon/assets/og.png" />
     <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
     />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <script>
       // Runs before the stylesheet paints, so a stored choice never shows a
       // flash of the other theme. Deliberately inline and blocking: a
@@ -46,10 +61,10 @@
         <nav class="site-nav" aria-label="Primary">
           <ul>
             <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Getting started</a></li>
             <li><a href="architecture.html">Architecture</a></li>
             <li><a href="implementation.html" aria-current="page">Implementation</a></li>
             <li><a href="agents.html">For agents</a></li>
-            <li><a href="getting-started.html">Getting started</a></li>
           </ul>
         </nav>
         <a
@@ -64,6 +79,7 @@
           class="theme-toggle"
           type="button"
           data-theme-toggle
+          hidden
           title="Switch theme"
         >
           <svg class="icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg>
@@ -84,9 +100,22 @@
             every one of them acquires a workaround.
           </p>
 
+          <details class="toc" open data-collapse-narrow>
+            <summary>On this page</summary>
+            <nav aria-label="On this page">
+              <ol>
+                <li><a href="#manifest"><span class="toc-n">01</span> The manifest</a></li>
+                <li><a href="#identity"><span class="toc-n">02</span> Revision identity</a></li>
+                <li><a href="#chunking"><span class="toc-n">03</span> Chunking</a></li>
+                <li><a href="#validation"><span class="toc-n">04</span> Rejecting at the boundary</a></li>
+                <li><a href="#packages"><span class="toc-n">05</span> Five packages</a></li>
+              </ol>
+            </nav>
+          </details>
+
           <!-- ------------------------------------------------ 01 manifest -->
           <section class="section" id="manifest" aria-labelledby="manifest-h">
-            <p class="eyebrow">01</p>
+            <p class="eyebrow">01 — The contract</p>
             <h2 id="manifest-h">The manifest</h2>
             <p>
               The design rule is that a manifest is a <em>complete</em> index of a revision.
@@ -98,7 +127,7 @@
 
             <figure class="code bleed">
               <figcaption>manifest.json — abridged, from a real publish</figcaption>
-              <pre><code>{
+              <pre class="wrap"><code>{
   "schemaVersion": 1,
   "bundleId": "github.com/yorch/colophon",
   "revisionId": "c25e73f7eee0c052eeccc2db0e1de2dfc06c391c6c514c381f3cfeab9d029d7a",
@@ -123,22 +152,22 @@
       "status": "current",
       "tags": ["architecture"],
       "headings": [
-        { "depth": 1, "text": "Architecture",         "anchor": "architecture" },
-        { "depth": 2, "text": "Pipeline",             "anchor": "pipeline" },
-        { "depth": 2, "text": "Two storage systems",  "anchor": "two-storage-systems" }
+        { "depth": 1, "text": "Architecture", "anchor": "architecture" },
+        { "depth": 2, "text": "Pipeline", "anchor": "pipeline" },
+        { "depth": 2, "text": "Two storage systems", "anchor": "two-storage-systems" }
       ],
       "contentHash": "1f08ced741e5626a59950c29ffe9cdb5a1139c33df90be5114d12417bc29b36b",
       "size": 2187
     }
   ],
   "nav": [
-    { "title": "Colophon",     "slug": "" },
+    { "title": "Colophon", "slug": "" },
     { "title": "Architecture", "slug": "architecture" },
     {
       "title": "Guides",
       "children": [
         { "title": "Publishing documentation", "slug": "guides/publishing" },
-        { "title": "Writing documentation",    "slug": "guides/writing-docs" }
+        { "title": "Writing documentation", "slug": "guides/writing-docs" }
       ]
     }
   ],
@@ -168,7 +197,7 @@
 
           <!-- ------------------------------------------------ 02 identity -->
           <section class="section" id="identity" aria-labelledby="identity-h">
-            <p class="eyebrow">02</p>
+            <p class="eyebrow">02 — Identity</p>
             <h2 id="identity-h">Revision identity</h2>
             <p>
               The revision id is the sha-256 of the canonicalised manifest body — but not of
@@ -178,6 +207,7 @@
 
             <div class="table-wrap bleed">
               <table>
+                <caption class="sr-only">Which manifest fields are part of the revision id</caption>
                 <thead>
                   <tr>
                     <th scope="col">Field</th>
@@ -253,7 +283,7 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
           <!-- ------------------------------------------------ 03 chunking -->
           <section class="section" id="chunking" aria-labelledby="chunking-h">
-            <p class="eyebrow">03</p>
+            <p class="eyebrow">03 — Retrieval</p>
             <h2 id="chunking-h">Chunking</h2>
             <p>
               Retrieval chunks are what an agent actually receives from
@@ -339,6 +369,7 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
             <div class="table-wrap bleed">
               <table>
+                <caption class="sr-only">Chunking options with their defaults and behaviour</caption>
                 <thead>
                   <tr>
                     <th scope="col">Option</th>
@@ -414,7 +445,7 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
           <!-- ---------------------------------------------- 04 validation -->
           <section class="section" id="validation" aria-labelledby="validation-h">
-            <p class="eyebrow">04</p>
+            <p class="eyebrow">04 — Validation</p>
             <h2 id="validation-h">Rejecting at the boundary</h2>
             <p>
               <code>validate</code> and <code>publish</code> run the same build, so the two
@@ -447,7 +478,7 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
           <!-- ----------------------------------------------- 05 packages -->
           <section class="section" id="packages" aria-labelledby="packages-h">
-            <p class="eyebrow">05</p>
+            <p class="eyebrow">05 — Packages</p>
             <h2 id="packages-h">Five packages</h2>
             <p>
               The roles follow Backstage conventions, which is not cosmetic: the role drives
@@ -457,6 +488,7 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
             <div class="table-wrap bleed">
               <table>
+                <caption class="sr-only">The five packages, their roles and what each owns</caption>
                 <thead>
                   <tr>
                     <th scope="col">Package</th>
@@ -516,11 +548,11 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
 
           <nav class="pager bleed" aria-label="Page navigation">
             <a href="architecture.html">
-              <span class="eyebrow" style="display: block">Previous</span>
+              <span class="eyebrow">Previous</span>
               ← Architecture
             </a>
             <a href="agents.html">
-              <span class="eyebrow" style="display: block">Next</span>
+              <span class="eyebrow">Next</span>
               For agents →
             </a>
           </nav>
@@ -536,14 +568,15 @@ bundles/&lt;bundleId&gt;/revisions/&lt;revisionId&gt;/manifest.json</code></pre>
         </p>
         <p class="small">
           <a href="index.html">Overview</a> ·
+          <a href="getting-started.html">Getting started</a> ·
           <a href="architecture.html">Architecture</a> ·
           <a href="agents.html">For agents</a> ·
-          <a href="getting-started.html">Getting started</a> ·
           <a href="https://github.com/yorch/colophon/tree/main/docs">Reference docs</a> ·
           <a href="https://github.com/yorch/colophon">GitHub</a>
         </p>
       </div>
     </footer>
     <script src="assets/theme.js" defer></script>
+    <script src="assets/enhance.js" defer></script>
   </body>
 </html>

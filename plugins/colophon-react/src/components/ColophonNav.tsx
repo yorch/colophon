@@ -78,7 +78,13 @@ function NavEntry({
 }) {
   if (node.slug === undefined) {
     return (
-      <Text variant="body-small" weight="bold" color="secondary" as="div">
+      <Text
+        variant="body-small"
+        weight="bold"
+        color="secondary"
+        as="div"
+        className="colophon-nav-group"
+      >
         {node.title}
       </Text>
     );

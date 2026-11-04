@@ -4,10 +4,15 @@ import { scmIntegrationsApiRef } from '@backstage/integration-react';
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
 import type { Manifest, Page } from '@brnby/colophon-common';
-import { screen, waitFor } from '@testing-library/react';
+import {
+  COLOPHON_STYLE_ELEMENT_ID,
+  ensureColophonStyles,
+} from '@brnby/plugin-colophon-react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ColophonApi, ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
-import { DocsBrowser } from './DocsBrowser';
+import { DocsBrowser, navBreakpointPx } from './DocsBrowser';
 
 /**
  * A real registry rather than a stub, so the header renders the URL the
@@ -84,7 +89,11 @@ function apiStub(overrides: Partial<ColophonApi> = {}): ColophonApi {
   };
 }
 
-async function renderWith(api: ColophonApi, bundleId = 'github.com/brnby/api') {
+async function renderWith(
+  api: ColophonApi,
+  bundleId = 'github.com/brnby/api',
+  extra: { routeEntries?: string[]; channel?: string } = {},
+) {
   return renderInTestApp(
     <TestApiProvider
       apis={[
@@ -92,8 +101,9 @@ async function renderWith(api: ColophonApi, bundleId = 'github.com/brnby/api') {
         [scmIntegrationsApiRef, scm],
       ]}
     >
-      <DocsBrowser bundleId={bundleId} />
+      <DocsBrowser bundleId={bundleId} channel={extra.channel} />
     </TestApiProvider>,
+    { routeEntries: extra.routeEntries },
   );
 }
 
@@ -101,7 +111,9 @@ describe('DocsBrowser', () => {
   it('shows a loading state before the manifest resolves', async () => {
     const api = apiStub({ getManifest: jest.fn(() => new Promise(() => {})) });
     await renderWith(api);
-    expect(screen.getByText('Loading documentation…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading documentation',
+    );
   });
 
   it('shows an error state when the manifest fetch fails', async () => {
@@ -285,5 +297,309 @@ describe('DocsBrowser source links', () => {
     );
     expect(screen.queryByRole('link', { name: 'Edit this page' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'View source' })).toBeNull();
+  });
+});
+
+/** What `ResponseError` looks like to the code that classifies it. */
+function httpError(status: number): Error {
+  return Object.assign(new Error(`Request failed with ${status}`), {
+    response: { status },
+  });
+}
+
+describe('DocsBrowser failure states', () => {
+  it('explains an unknown version and offers the default one', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockRejectedValue(httpError(404)),
+    });
+    await renderWith(api, 'github.com/brnby/api', {
+      channel: 'pr-42',
+      routeEntries: ['/docs?channel=pr-42&page=x'],
+    });
+    expect(
+      await screen.findByText("That version doesn't exist"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Request failed/)).toBeNull();
+    // Both the channel and the page are dropped: the page may not exist in
+    // the default version either, and landing on a second 404 is no way out.
+    expect(
+      screen.getByRole('link', { name: 'View the default version' }),
+    ).toHaveAttribute('href', '/docs');
+  });
+
+  it('explains an unknown bundle without blaming the reader', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockRejectedValue(httpError(404)),
+    });
+    await renderWith(api);
+    expect(
+      await screen.findByText('Documentation not found'),
+    ).toBeInTheDocument();
+    // Not an alert: a stale link is not a malfunction.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('links to all documentation from an unknown bundle when told where', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockRejectedValue(httpError(404)),
+    });
+    await renderInTestApp(
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, api],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
+        <DocsBrowser bundleId="x/y" docsHref="/handbook" />
+      </TestApiProvider>,
+    );
+    expect(
+      await screen.findByRole('link', { name: 'Browse all documentation' }),
+    ).toHaveAttribute('href', '/handbook');
+  });
+
+  it('answers an unknown page from the manifest without fetching it', async () => {
+    const getPage = jest.fn();
+    const api = apiStub({ getPage });
+    await renderWith(api, 'github.com/brnby/api', {
+      routeEntries: ['/docs?page=nope'],
+    });
+    expect(
+      await screen.findByText("This page doesn't exist"),
+    ).toBeInTheDocument();
+    expect(getPage).not.toHaveBeenCalled();
+    // The navigation survives, so there is somewhere to go.
+    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Go to the start page' }),
+    ).toHaveAttribute('href', '/docs');
+  });
+
+  it('treats a page the server calls missing as not found, not as a failure', async () => {
+    const api = apiStub({
+      getPage: jest.fn().mockRejectedValue(httpError(404)),
+    });
+    await renderWith(api);
+    expect(
+      await screen.findByText("This page doesn't exist"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Could not load this page')).toBeNull();
+  });
+
+  it('keeps the raw message out of the headline and offers a retry', async () => {
+    const getManifest = jest
+      .fn()
+      .mockRejectedValueOnce(httpError(500))
+      .mockResolvedValue(resolved());
+    await renderWith(apiStub({ getManifest }));
+
+    const alert = await screen.findByRole('alert');
+    expect(
+      within(alert).getByText('Could not load documentation'),
+    ).toBeVisible();
+    // Present for whoever reports it, but folded away.
+    expect(within(alert).getByText('Technical details')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Payments API' }),
+    ).toBeInTheDocument();
+    expect(getManifest).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a failed page without refetching the manifest', async () => {
+    const getManifest = jest.fn().mockResolvedValue(resolved());
+    const getPage = jest
+      .fn()
+      .mockRejectedValueOnce(httpError(500))
+      .mockResolvedValue({
+        markdown: 'Recovered',
+        revisionId: 'r',
+        channel: 'latest',
+      });
+    await renderWith(apiStub({ getManifest, getPage }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Recovered')).toBeInTheDocument();
+  });
+});
+
+describe('DocsBrowser chrome', () => {
+  it('sets the tab title from the page and bundle, and restores it', async () => {
+    document.title = 'Backstage';
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            title: 'Payments',
+            pages: [page({ title: 'Deploying' })],
+          }),
+        }),
+      ),
+    });
+    const { unmount } = await renderWith(api);
+    await waitFor(() => expect(document.title).toBe('Deploying · Payments'));
+    unmount();
+    expect(document.title).toBe('Backstage');
+  });
+
+  it('reports the bundle title to a host page', async () => {
+    const onBundleTitle = jest.fn();
+    await renderInTestApp(
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, apiStub()],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
+        <DocsBrowser bundleId="x/y" onBundleTitle={onBundleTitle} />
+      </TestApiProvider>,
+    );
+    await waitFor(() =>
+      expect(onBundleTitle).toHaveBeenCalledWith('Payments API'),
+    );
+  });
+
+  it('offers a skip link that moves focus to the content', async () => {
+    await renderWith(apiStub());
+    const skip = await screen.findByRole('link', { name: 'Skip to content' });
+    await userEvent.click(skip);
+    expect(skip.getAttribute('href')?.startsWith('#')).toBe(true);
+    // The target is the main column, focusable programmatically only.
+    const target = document.getElementById(
+      skip.getAttribute('href')?.slice(1) ?? '',
+    );
+    expect(target).toHaveFocus();
+  });
+
+  // The Pages disclosure closing on a page change depends on the container's
+  // measured width, and jsdom has no layout — `useContainerWidth` reports
+  // nothing there — so that behaviour is for a browser to confirm.
+  it('keeps the version picker outside the collapsible Pages menu', async () => {
+    const api = apiStub({
+      getChannels: jest.fn().mockResolvedValue([
+        {
+          bundleId: 'b',
+          channel: 'latest',
+          revisionId: 'r',
+          updatedAt: '',
+          isDefault: true,
+        },
+        {
+          bundleId: 'b',
+          channel: '1.x',
+          revisionId: 'r2',
+          updatedAt: '',
+          isDefault: false,
+        },
+      ]),
+    });
+    const { container } = await renderInTestApp(
+      <TestApiProvider
+        apis={[
+          [colophonApiRef, api],
+          [scmIntegrationsApiRef, scm],
+        ]}
+      >
+        <DocsBrowser bundleId="x/y" onChannelChange={jest.fn()} />
+      </TestApiProvider>,
+    );
+    const label = await screen.findByText('Version');
+    expect(label.closest('details')).toBeNull();
+    expect(container.querySelector('details')).not.toBeNull();
+  });
+});
+
+describe('DocsBrowser breakpoint', () => {
+  it('closes Pages at the same width the stylesheet stops hiding its summary', () => {
+    // A 56 in script against CSS's 48 left a band where the summary was
+    // hidden and the <details> already shut: no way to open the nav.
+    ensureColophonStyles();
+    const css = document.getElementById(COLOPHON_STYLE_ELEMENT_ID)?.textContent;
+    const rem = navBreakpointPx() / 16;
+    expect(css).toContain(`@container (min-width: ${rem}rem)`);
+    expect(css).toMatch(
+      new RegExp(
+        `@container \\(min-width: ${rem}rem\\) \\{\\s*\\.colophon-nav-disclosure > summary \\{ display: none`,
+      ),
+    );
+  });
+});
+
+describe('DocsBrowser table of contents', () => {
+  it('puts the disclosure in the content column, after the Pages menu', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            pages: [
+              page({
+                headings: [{ depth: 2, text: 'Setup', anchor: 'setup' }],
+              }),
+            ],
+          }),
+        }),
+      ),
+    });
+    const { container } = await renderWith(api);
+    await screen.findByRole('heading', { name: 'Payments API' });
+    const pages = container.querySelector('.colophon-nav-disclosure');
+    const disclosure = container.querySelector('.colophon-toc-disclosure');
+    expect(pages).not.toBeNull();
+    expect(
+      (pages as Element).compareDocumentPosition(disclosure as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(disclosure?.closest('.colophon-layout-main')).not.toBeNull();
+  });
+
+  it('lists a demoted body h1 in the table of contents', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            pages: [
+              page({
+                headings: [
+                  { depth: 1, text: 'Payments API', anchor: 'payments-api' },
+                  { depth: 1, text: 'Appendix', anchor: 'appendix' },
+                ],
+              }),
+            ],
+          }),
+        }),
+      ),
+    });
+    await renderWith(api);
+    await screen.findByRole('heading', { name: 'Payments API' });
+    expect(
+      (await screen.findAllByRole('link', { name: 'Appendix' })).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Payments API' })).toBeNull();
+  });
+
+  it('renders the disclosure and sidebar TOC only for pages with headings', async () => {
+    const withHeadings = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            pages: [
+              page({
+                headings: [{ depth: 2, text: 'Setup', anchor: 'setup' }],
+              }),
+            ],
+          }),
+        }),
+      ),
+    });
+    const { container, unmount } = await renderWith(withHeadings);
+    await screen.findByRole('heading', { name: 'Payments API' });
+    expect(screen.getAllByText('On this page').length).toBeGreaterThan(0);
+    expect(container.querySelector('.colophon-layout-toc')).not.toBeNull();
+    unmount();
+
+    const { container: bare } = await renderWith(apiStub());
+    await screen.findByRole('heading', { name: 'Payments API' });
+    expect(screen.queryByText('On this page')).toBeNull();
+    expect(bare.querySelector('.colophon-layout-toc')).toBeNull();
   });
 });
