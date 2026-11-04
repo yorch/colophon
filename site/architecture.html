@@ -8,12 +8,27 @@
       name="description"
       content="How a docs directory becomes a bundle: the publish pipeline, the object-storage and Postgres split, and why revisions are immutable while channels are mutable pointers."
     />
+    <link rel="canonical" href="https://yorch.github.io/colophon/architecture.html" />
+    <meta property="og:site_name" content="Colophon" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Architecture — Colophon" />
+    <meta property="og:description" content="How a docs directory becomes a bundle: the publish pipeline, the object-storage and Postgres split, and why revisions are immutable while channels are mutable pointers." />
+    <meta property="og:url" content="https://yorch.github.io/colophon/architecture.html" />
+    <meta property="og:image" content="https://yorch.github.io/colophon/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Colophon: Markdown documentation for the Backstage catalog" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Architecture — Colophon" />
+    <meta name="twitter:description" content="How a docs directory becomes a bundle: the publish pipeline, the object-storage and Postgres split, and why revisions are immutable while channels are mutable pointers." />
+    <meta name="twitter:image" content="https://yorch.github.io/colophon/assets/og.png" />
     <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d5d54'/%3E%3Cpath d='M7 7.5h10M7 12h10M7 16.5h6' stroke='%23e2efec' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
     />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <script>
       // Runs before the stylesheet paints, so a stored choice never shows a
       // flash of the other theme. Deliberately inline and blocking: a
@@ -46,10 +61,10 @@
         <nav class="site-nav" aria-label="Primary">
           <ul>
             <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Getting started</a></li>
             <li><a href="architecture.html" aria-current="page">Architecture</a></li>
             <li><a href="implementation.html">Implementation</a></li>
             <li><a href="agents.html">For agents</a></li>
-            <li><a href="getting-started.html">Getting started</a></li>
           </ul>
         </nav>
         <a
@@ -64,6 +79,7 @@
           class="theme-toggle"
           type="button"
           data-theme-toggle
+          hidden
           title="Switch theme"
         >
           <svg class="icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg>
@@ -83,9 +99,22 @@
             keep routing out of the stored artifact. Everything below follows from those.
           </p>
 
+          <details class="toc" open data-collapse-narrow>
+            <summary>On this page</summary>
+            <nav aria-label="On this page">
+              <ol>
+                <li><a href="#pipeline"><span class="toc-n">01</span> The pipeline</a></li>
+                <li><a href="#storage"><span class="toc-n">02</span> Two storage systems, split by artifact type</a></li>
+                <li><a href="#revisions"><span class="toc-n">03</span> Revisions are content; channels are routing</a></li>
+                <li><a href="#indexing"><span class="toc-n">04</span> Indexing discipline</a></li>
+                <li><a href="#ordering"><span class="toc-n">05</span> The manifest is written last</a></li>
+              </ol>
+            </nav>
+          </details>
+
           <!-- ------------------------------------------------ 01 pipeline -->
           <section class="section" id="pipeline" aria-labelledby="pipeline-h">
-            <p class="eyebrow">01</p>
+            <p class="eyebrow">01 — Flow</p>
             <h2 id="pipeline-h">The pipeline</h2>
             <p>
               CI publishes; the backend ingests; three surfaces read the index. Each stage
@@ -191,7 +220,7 @@
 
           <!-- ------------------------------------------------- 02 storage -->
           <section class="section" id="storage" aria-labelledby="storage-h">
-            <p class="eyebrow">02</p>
+            <p class="eyebrow">02 — Storage</p>
             <h2 id="storage-h">Two storage systems, split by artifact type</h2>
             <p>
               The split is not a deployment convenience. The two kinds of artifact have
@@ -201,6 +230,7 @@
 
             <div class="table-wrap bleed">
               <table>
+                <caption class="sr-only">Object storage compared with Postgres: what each holds and why</caption>
                 <thead>
                   <tr>
                     <th scope="col"></th>
@@ -314,7 +344,7 @@
 
           <!-- --------------------------------------- 03 revisions/channels -->
           <section class="section" id="revisions" aria-labelledby="revisions-h">
-            <p class="eyebrow">03</p>
+            <p class="eyebrow">03 — Versioning</p>
             <h2 id="revisions-h">Revisions are content; channels are routing</h2>
             <p>
               A <strong>revision</strong> is an immutable snapshot, identified by the sha-256
@@ -427,7 +457,7 @@
 
           <!-- ------------------------------------------------ 04 indexing -->
           <section class="section" id="indexing" aria-labelledby="indexing-h">
-            <p class="eyebrow">04</p>
+            <p class="eyebrow">04 — Indexing</p>
             <h2 id="indexing-h">Indexing discipline</h2>
             <p>
               Two rules keep the index from growing in proportion to how often CI runs
@@ -456,7 +486,7 @@
 
           <!-- -------------------------------------------- 05 write order -->
           <section class="section" id="ordering" aria-labelledby="ordering-h">
-            <p class="eyebrow">05</p>
+            <p class="eyebrow">05 — Ordering</p>
             <h2 id="ordering-h">The manifest is written last</h2>
             <p>
               Blobs go up first; the manifest goes up only once they are all present. Until
@@ -472,12 +502,12 @@
           </section>
 
           <nav class="pager bleed" aria-label="Page navigation">
-            <a href="index.html">
-              <span class="eyebrow" style="display: block">Previous</span>
-              ← Overview
+            <a href="getting-started.html">
+              <span class="eyebrow">Previous</span>
+              ← Getting started
             </a>
             <a href="implementation.html">
-              <span class="eyebrow" style="display: block">Next</span>
+              <span class="eyebrow">Next</span>
               Implementation →
             </a>
           </nav>
@@ -493,14 +523,15 @@
         </p>
         <p class="small">
           <a href="index.html">Overview</a> ·
+          <a href="getting-started.html">Getting started</a> ·
           <a href="implementation.html">Implementation</a> ·
           <a href="agents.html">For agents</a> ·
-          <a href="getting-started.html">Getting started</a> ·
           <a href="https://github.com/yorch/colophon/tree/main/docs">Reference docs</a> ·
           <a href="https://github.com/yorch/colophon">GitHub</a>
         </p>
       </div>
     </footer>
     <script src="assets/theme.js" defer></script>
+    <script src="assets/enhance.js" defer></script>
   </body>
 </html>

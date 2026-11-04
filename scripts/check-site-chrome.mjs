@@ -43,10 +43,12 @@ import { readFileSync } from 'node:fs';
  */
 const PAGES = [
   'index.html',
+  // Second, not last: it is where a reader who has understood the pitch
+  // goes next, and the pager flow follows this same sequence.
+  'getting-started.html',
   'architecture.html',
   'implementation.html',
   'agents.html',
-  'getting-started.html',
 ];
 
 /**
@@ -61,6 +63,13 @@ const SITE = new URL('../site/', import.meta.url);
 
 /** The one script tag every page is expected to load the toggle from. */
 const THEME_SCRIPT = '<script src="assets/theme.js" defer></script>';
+
+/**
+ * The progressive-enhancement script (copy buttons, keyboard-reachable scroll
+ * regions). Unlike the toggle it is not chrome, but a page that forgets the
+ * tag silently loses those affordances, which is the same failure mode.
+ */
+const ENHANCE_SCRIPT = '<script src="assets/enhance.js" defer></script>';
 
 const failures = [];
 
@@ -415,6 +424,20 @@ for (const { name, html } of pages) {
       name,
       'theme-script',
       `${count} copies of \`${THEME_SCRIPT}\`; it must appear exactly once`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Every page loads the enhancement script, exactly once.
+// ---------------------------------------------------------------------------
+for (const { name, html } of pages) {
+  const count = html.split(ENHANCE_SCRIPT).length - 1;
+  if (count !== 1) {
+    fail(
+      name,
+      'enhance-script',
+      `${count} copies of \`${ENHANCE_SCRIPT}\`; it must appear exactly once`,
     );
   }
 }
