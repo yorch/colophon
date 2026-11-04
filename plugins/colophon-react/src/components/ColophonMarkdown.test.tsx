@@ -389,7 +389,7 @@ describe('ColophonMarkdown', () => {
       expect(aside).toHaveTextContent('Rotate the key first.');
     });
 
-    it('strips that same output when the schema is left alone', async () => {
+    it('strips the class that same output carries when the schema is left alone', async () => {
       const { container } = await renderInTestApp(
         <ColophonMarkdown
           content={'> Rotate the key first.\n'}
@@ -397,9 +397,11 @@ describe('ColophonMarkdown', () => {
         />,
       );
 
-      // The text survives — only the element the plugin added is gone, which
-      // is why this failure mode reads as "the plugin did not run".
-      expect(container.querySelector('aside')).toBeNull();
+      // The text survives — only what the plugin added is gone, which is why
+      // this failure mode reads as "the plugin did not run". `aside` itself is
+      // now in the default schema (callouts use it), so what proves the
+      // schema is still narrow is that an arbitrary class does not get through.
+      expect(container.querySelector('.admonition')).toBeNull();
       expect(screen.getByText('Rotate the key first.')).toBeInTheDocument();
     });
 

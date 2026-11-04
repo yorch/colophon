@@ -75,11 +75,11 @@ describe('sanitization', () => {
   it('still renders the legitimate markdown it is given', () => {
     render(
       <ColophonMarkdown
-        content={'# Heading\n\nSome **bold** text and `code`.\n'}
+        content={'## Heading\n\nSome **bold** text and `code`.\n'}
       />,
     );
     // getByText throws when absent, so finding them is the assertion.
-    expect(screen.getByText('Heading').tagName).toBe('H1');
+    expect(screen.getByText('Heading').tagName).toBe('H2');
     expect(screen.getByText('bold').tagName).toBe('STRONG');
   });
 });

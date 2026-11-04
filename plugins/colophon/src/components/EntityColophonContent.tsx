@@ -23,6 +23,9 @@ export function EntityColophonContent() {
     (next: string) => {
       const params = new URLSearchParams(searchParams);
       params.set('channel', next);
+      // Replace, and the full-page reader does the same: choosing a version
+      // is a view setting, not a place the reader went, so Back should leave
+      // the docs rather than walk through every version tried.
       setSearchParams(params, { replace: true });
     },
     [searchParams, setSearchParams],

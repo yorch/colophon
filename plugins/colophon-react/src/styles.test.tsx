@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { render } from '@testing-library/react';
+import { ColophonMarkdown } from './components/ColophonMarkdown';
 import { ColophonNav } from './components/ColophonNav';
+import { ColophonPageHeader } from './components/ColophonPageHeader';
+import { ColophonSkeleton } from './components/ColophonSkeleton';
 import { ColophonToc } from './components/ColophonToc';
+import { MermaidDiagram } from './components/MermaidDiagram';
+import { defaultColophonComponents } from './defaultComponents';
 import {
   COLOPHON_STYLE_ELEMENT_ID,
   COLOPHON_STYLE_LAYER,
@@ -44,6 +49,86 @@ describe('stylesheet injection', () => {
     expect(styleTag()).not.toBeNull();
   });
 
+  it('is added by the toc disclosure on its own', () => {
+    expect(styleTag()).toBeNull();
+    render(
+      <ColophonToc
+        variant="disclosure"
+        headings={[{ depth: 2, text: 'A', anchor: 'a' }]}
+      />,
+    );
+    expect(styleTag()).not.toBeNull();
+  });
+
+  it('is added by the page header on its own', () => {
+    expect(styleTag()).toBeNull();
+    render(<ColophonPageHeader title="A" />);
+    expect(styleTag()).not.toBeNull();
+  });
+
+  it.each(['page', 'nav', 'layout'] as const)(
+    'is added by the %s skeleton on its own',
+    variant => {
+      expect(styleTag()).toBeNull();
+      render(<ColophonSkeleton variant={variant} />);
+      expect(styleTag()).not.toBeNull();
+    },
+  );
+
+  it('is added by the markdown renderer on its own', () => {
+    expect(styleTag()).toBeNull();
+    render(<ColophonMarkdown content="text" />);
+    expect(styleTag()).not.toBeNull();
+  });
+
+  it('is added by the mermaid component on its own', () => {
+    expect(styleTag()).toBeNull();
+    render(<MermaidDiagram language="mermaid" value="graph TD;" />);
+    expect(styleTag()).not.toBeNull();
+  });
+
+  // The default markdown components are exported and usable by an override
+  // that wraps one, so each that emits a `colophon-` class has to ensure the
+  // sheet without the renderer around it.
+  describe.each([
+    [
+      'codeBlock',
+      () => <defaultColophonComponents.codeBlock language="ts" value="a" />,
+    ],
+    ['code', () => <defaultColophonComponents.code value="a" />],
+    [
+      'heading',
+      () => (
+        <defaultColophonComponents.heading depth={2} id="a">
+          A
+        </defaultColophonComponents.heading>
+      ),
+    ],
+    [
+      'table',
+      () => (
+        <defaultColophonComponents.table>
+          {null}
+        </defaultColophonComponents.table>
+      ),
+    ],
+    ['image', () => <defaultColophonComponents.image src="a.png" alt="a" />],
+    [
+      'link (in-page)',
+      () => (
+        <defaultColophonComponents.link href="#a">
+          a
+        </defaultColophonComponents.link>
+      ),
+    ],
+  ])('default %s component', (_name, element) => {
+    it('adds the stylesheet on its own', () => {
+      expect(styleTag()).toBeNull();
+      render(element());
+      expect(styleTag()).not.toBeNull();
+    });
+  });
+
   it('is added exactly once however many components ask', () => {
     // A search results page renders one markdown block per hit, so this runs
     // as many times as there are results.
@@ -81,7 +166,7 @@ describe('stylesheet injection', () => {
     expect(opened).toBe(closed);
     // The container queries and the reduced-motion rule live inside it. A
     // layer scopes the cascade, not matching, so nesting changes nothing.
-    expect(css).toContain('@container (min-width: 56rem)');
+    expect(css).toContain('@container (min-width: 48rem)');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
@@ -94,6 +179,8 @@ describe('stylesheet injection', () => {
       '.colophon-nav-disclosure',
       '.colophon-bundle-row',
       '.colophon-skeleton',
+      '.colophon-skip-link',
+      '.colophon-channel-picker:focus-within',
       "a[aria-current='page']",
     ]) {
       expect(css).toContain(rule);
@@ -113,6 +200,72 @@ describe('stylesheet injection', () => {
  * ships. This also turns an upgrade that renames a token into a test failure
  * rather than a visual regression nobody is looking for.
  */
+/**
+ * String checks on the stylesheet text. jsdom has no cascade, no container and
+ * no :focus-visible, so these only pin the SOURCE of a decision a browser has
+ * to honour; that the result looks right is a real-browser question.
+ */
+describe('stylesheet source', () => {
+  const css = () => {
+    ensureColophonStyles();
+    return styleTag()?.textContent ?? '';
+  };
+
+  afterEach(() => {
+    styleTag()?.remove();
+  });
+
+  it('gives every interactive element a focus-visible outline', () => {
+    const text = css();
+    for (const selector of [
+      '.colophon-nav-list a:focus-visible',
+      '.colophon-toc-link:focus-visible',
+      '.colophon-nav-disclosure > summary:focus-visible',
+      '.colophon-markdown a:focus-visible',
+      '.colophon-code-copy:focus-visible',
+      '.colophon-heading-anchor:focus-visible',
+      '.colophon-scroll:focus-visible',
+      '.colophon-channel-picker',
+    ]) {
+      expect(text).toContain(selector);
+    }
+  });
+
+  it('never matches the same width on both sides of a breakpoint', () => {
+    // min-width and max-width are both inclusive, so a pair at one value both
+    // match exactly there. The collapsed side is a negated min-width instead.
+    const text = css();
+    expect(text).not.toMatch(/@container \(max-width/);
+    expect(text).toContain('@container not (min-width: 48rem)');
+    expect(text).toContain('@container (min-width: 64rem)');
+  });
+
+  it('keeps @media to device-level concerns only', () => {
+    const queries = [...css().matchAll(/^@media ([^{]+)\{/gm)].map(m =>
+      m[1].trim(),
+    );
+    expect([...new Set(queries)].sort()).toEqual([
+      '(hover: none)',
+      '(pointer: coarse)',
+      '(prefers-reduced-motion: reduce)',
+    ]);
+  });
+
+  it('gives nav and toc rows a touch-sized minimum height', () => {
+    const text = css();
+    expect(text).toMatch(/min-height: 2rem/);
+    expect(text).toMatch(
+      /@media \(pointer: coarse\)[\s\S]*min-height: 2\.5rem/,
+    );
+  });
+
+  it('does not let the bundle link draw a second focus ring', () => {
+    expect(css()).toMatch(
+      /\.colophon-bundle-row-link:focus-visible \{ outline: none; \}/,
+    );
+  });
+});
+
 describe('design tokens', () => {
   const backstageUiCss = () => {
     const manifest = require.resolve('@backstage/ui/package.json');

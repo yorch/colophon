@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import type { ColophonPluginList } from '../pipeline';
 import { assertNoReservedPlugins, useColophonPipeline } from '../pipeline';
 import { useColophonComponents } from '../registry';
+import { remarkCallouts } from '../remarkCallouts';
 import type { SanitizeSchema } from '../sanitizeSchema';
 import { colophonSanitizeSchema } from '../sanitizeSchema';
 import { useColophonStyles } from '../styles';
@@ -17,6 +18,17 @@ import type { CodeBlockProps, TableCellProps } from '../types';
 export interface ColophonMarkdownProps {
   /** Markdown source, as published. */
   content: string;
+  /**
+   * The title the page header already shows.
+   *
+   * A page body usually opens with `# Title`, and the header above it is the
+   * page's `h1` — two of them is a heading-structure error and shows the title
+   * twice. A leading body `h1` whose text equals this is dropped (its id is
+   * kept as an empty anchor so links to it still resolve); any other body
+   * `h1` is demoted to `h2`. Without this prop every body `h1` is demoted but
+   * none can be recognised as a duplicate.
+   */
+  pageTitle?: string;
   /** Added to the wrapper, for consumers that want their own prose rules. */
   className?: string;
   /**
@@ -50,7 +62,7 @@ export interface ColophonMarkdownProps {
    *
    * Extend the default rather than replacing it — page bodies come from
    * arbitrary repositories, so this is a security boundary, and the shipped
-   * schema is GitHub's allow-list plus the three things the renderer needs.
+   * schema is GitHub's allow-list plus the few things the renderer needs.
    * Widening it is how a remark plugin's new elements survive to the DOM, and
    * it is the ONLY supported route to the sanitiser's configuration.
    */
@@ -67,6 +79,7 @@ export interface ColophonMarkdownProps {
  */
 export function ColophonMarkdown({
   content,
+  pageTitle,
   className,
   remarkPlugins,
   rehypePlugins,
@@ -104,6 +117,7 @@ export function ColophonMarkdown({
       codeLanguages,
     } = overrides;
 
+    const wanted = normalise(pageTitle);
     const renderHeading = (depth: 1 | 2 | 3 | 4 | 5 | 6) =>
       function ColophonHeading({
         id,
@@ -112,6 +126,16 @@ export function ColophonMarkdown({
         id?: string;
         children?: ReactNode;
       }) {
+        if (depth === 1) {
+          if (wanted && normalise(toText(children)) === wanted) {
+            return id ? <span id={id} /> : null;
+          }
+          return (
+            <Heading depth={2} id={id}>
+              {children}
+            </Heading>
+          );
+        }
         return (
           <Heading depth={depth} id={id}>
             {children}
@@ -214,7 +238,7 @@ export function ColophonMarkdown({
       h5: renderHeading(5),
       h6: renderHeading(6),
     };
-  }, [overrides]);
+  }, [overrides, pageTitle]);
 
   // A provider's additions come first, then this instance's props, so a
   // page-level plugin composes onto an app-wide one rather than shadowing it.
@@ -267,7 +291,11 @@ export function ColophonMarkdown({
   );
 }
 
-const REMARK_PLUGINS: ColophonPluginList = [remarkGfm];
+const REMARK_PLUGINS: ColophonPluginList = [remarkGfm, remarkCallouts];
+
+function normalise(text: string | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
 
 const ALIGNMENTS = ['left', 'center', 'right'] as const;
 

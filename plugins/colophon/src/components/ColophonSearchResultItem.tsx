@@ -1,15 +1,95 @@
-import { Link } from '@backstage/core-components';
 import type {
   ResultHighlight,
   SearchDocument,
 } from '@backstage/plugin-search-common';
-import { HighlightedSearchResultText } from '@backstage/plugin-search-react';
-import { Box, Text } from '@backstage/ui';
+import { Box, Link, Text } from '@backstage/ui';
+import type { CSSProperties, ReactNode } from 'react';
 
 /** What the collator adds on top of the standard search document. */
 type ColophonResult = SearchDocument & {
+  bundleId?: string;
   breadcrumb?: string[];
   pageTitle?: string;
+};
+
+/**
+ * Tags a search engine may leave in a field that are NOT its highlight tags.
+ *
+ * Seen in the wild as `<284a1ec5-…>word</284a1ec5-…>`: a per-request random
+ * token used as the highlight marker, of which only some occurrences were
+ * matched up. Anything shaped like a UUID-led tag is engine plumbing, never
+ * documentation text, so it is dropped rather than printed.
+ */
+const STRAY_TAG = /<\/?[0-9a-f]{8}-[^<>\s]*>/gi;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Turns an engine-highlighted string into React nodes.
+ *
+ * Deliberately not `dangerouslySetInnerHTML` and not a general HTML parser:
+ * the only markup honoured is the one pair of tags the engine said it used,
+ * and everything else is text. An unmatched opening tag highlights nothing
+ * rather than swallowing the rest of the snippet.
+ */
+export function renderHighlighted(
+  text: string,
+  preTag?: string,
+  postTag?: string,
+): ReactNode {
+  const flat = text.replace(STRAY_TAG, '').replace(/\s+/g, ' ').trim();
+  if (!preTag || !postTag || preTag === postTag) {
+    return flat;
+  }
+
+  const splitter = new RegExp(
+    `(${escapeRegExp(preTag)}|${escapeRegExp(postTag)})`,
+  );
+  const parts = flat.split(splitter);
+  const nodes: ReactNode[] = [];
+  let open: string | undefined;
+  let key = 0;
+
+  for (const part of parts) {
+    if (part === preTag) {
+      // A second opener without a closer: the first one never matched.
+      if (open !== undefined) {
+        nodes.push(open);
+      }
+      open = '';
+    } else if (part === postTag) {
+      if (open !== undefined) {
+        if (open) {
+          key += 1;
+          nodes.push(<mark key={key}>{open}</mark>);
+        }
+        open = undefined;
+      }
+      // A closer with no opener is dropped.
+    } else if (open !== undefined) {
+      open += part;
+    } else if (part) {
+      nodes.push(part);
+    }
+  }
+  if (open) {
+    nodes.push(open);
+  }
+  return nodes;
+}
+
+/**
+ * Sections run to many lines, and a result list is for scanning. Clamped in
+ * CSS rather than by cutting the string, so the highlighted match is never
+ * sliced in half and the full text stays available to assistive technology.
+ */
+const SNIPPET_STYLE: CSSProperties = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 3,
+  overflow: 'hidden',
 };
 
 /**
@@ -30,8 +110,14 @@ export function ColophonSearchResultItem(props: {
     return null;
   }
 
-  // The last entry is the matched section itself, which the title already is.
-  const trail = (result.breadcrumb ?? []).slice(0, -1);
+  // Which repository it came from leads the trail: several repositories can
+  // each have an "Architecture" page, and the heading trail alone cannot tell
+  // them apart. The last breadcrumb entry is the matched section itself,
+  // which the title already is.
+  const trail = [
+    ...(result.bundleId ? [result.bundleId] : []),
+    ...(result.breadcrumb ?? []).slice(0, -1),
+  ];
   const { highlight } = props;
 
   // Query terms come back wrapped in the engine's own tags, and rendering the
@@ -39,25 +125,26 @@ export function ColophonSearchResultItem(props: {
   // field matters as much: not every engine returns highlights, and a result
   // with no snippet at all is worse than one without emphasis.
   const highlighted = (field: 'title' | 'text', fallback: string) =>
-    highlight?.fields?.[field] ? (
-      <HighlightedSearchResultText
-        text={highlight.fields[field]}
-        preTag={highlight.preTag}
-        postTag={highlight.postTag}
-      />
-    ) : (
-      fallback
+    renderHighlighted(
+      highlight?.fields?.[field] ?? fallback,
+      highlight?.preTag,
+      highlight?.postTag,
     );
 
   return (
     <Box style={{ paddingBlock: 'var(--bui-space-2)' }}>
-      <Link to={result.location}>{highlighted('title', result.title)}</Link>
+      <Link href={result.location}>{highlighted('title', result.title)}</Link>
       {trail.length > 0 && (
         <Text variant="body-small" color="secondary" as="div">
           {trail.join(' › ')}
         </Text>
       )}
-      <Text variant="body-small" color="secondary" as="div">
+      <Text
+        variant="body-small"
+        color="secondary"
+        as="div"
+        style={SNIPPET_STYLE}
+      >
         {highlighted('text', result.text)}
       </Text>
     </Box>

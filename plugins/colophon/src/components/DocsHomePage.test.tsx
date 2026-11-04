@@ -58,7 +58,9 @@ describe('DocsHomePage browse list', () => {
   it('shows a loading state before bundles resolve', async () => {
     const api = apiStub({ listBundles: jest.fn(() => new Promise(() => {})) });
     await renderAt(api, '/');
-    expect(screen.getByText('Loading documentation…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading documentation',
+    );
   });
 
   it('shows an error state when the list fails to load', async () => {
@@ -96,7 +98,10 @@ describe('DocsHomePage browse list', () => {
     );
     expect(screen.getByText('Billing')).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText('Filter'), 'billing');
+    await userEvent.type(
+      screen.getByLabelText('Filter documentation'),
+      'billing',
+    );
 
     expect(screen.queryByText('Payments API')).not.toBeInTheDocument();
     expect(screen.getByText('Billing')).toBeInTheDocument();
@@ -158,9 +163,146 @@ describe('DocsHomePage bundle route', () => {
     const api = apiStub();
     await renderAt(api, '/github.com/brnby/api', '/handbook');
     await waitFor(() =>
-      expect(
-        screen.getByRole('link', { name: '← All documentation' }),
-      ).toHaveAttribute('href', '/handbook'),
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+        'href',
+        '/handbook',
+      ),
     );
+  });
+
+  it('names the bundle in the breadcrumb once it has loaded', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue({
+        bundleId: 'github.com/brnby/api',
+        channel: 'latest',
+        revisionId: 'r',
+        isDefault: true,
+        updatedAt: '2026-08-20T10:00:00.000Z',
+        manifest: {
+          title: 'Payments API',
+          pages: [],
+          nav: [],
+          assets: [],
+        },
+      }),
+    });
+    await renderAt(api, '/github.com/brnby/api');
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    // Before the manifest arrives the id stands in, so the trail is never empty.
+    await waitFor(() => expect(nav).toHaveTextContent('Docs›Payments API'));
+  });
+});
+
+describe('DocsHomePage presentation', () => {
+  it('sorts alphabetically by title and counts repositories', async () => {
+    const api = apiStub({
+      listBundles: jest
+        .fn()
+        .mockResolvedValue([
+          bundle({ bundleId: 'x/stress', title: 'Stress test' }),
+          bundle({ bundleId: 'x/colophon', title: 'Colophon' }),
+          bundle({ bundleId: 'x/api', title: 'api' }),
+        ]),
+    });
+    await renderAt(api, '/');
+    await screen.findByRole('heading', { name: 'Documentation' });
+    expect(screen.getByText(/from 3 repositories/)).toBeInTheDocument();
+    const names = screen
+      .getAllByRole('link')
+      .map(link => link.textContent)
+      .filter(text => ['Stress test', 'Colophon', 'api'].includes(text ?? ''));
+    expect(names).toEqual(['api', 'Colophon', 'Stress test']);
+  });
+
+  it('shows when a bundle was last published, from its default channel', async () => {
+    const api = apiStub({
+      listBundles: jest.fn().mockResolvedValue([
+        bundle({
+          defaultChannel: 'latest',
+          channels: [
+            {
+              bundleId: 'github.com/brnby/api',
+              channel: 'pr-1',
+              revisionId: 'r',
+              updatedAt: '2026-09-01T00:00:00.000Z',
+              isDefault: false,
+            },
+            {
+              bundleId: 'github.com/brnby/api',
+              channel: 'latest',
+              revisionId: 'r',
+              updatedAt: '2026-08-20T10:00:00.000Z',
+              isDefault: true,
+            },
+          ],
+        }),
+      ]),
+    });
+    const { container } = await renderAt(api, '/');
+    await screen.findByText(/Updated/);
+    expect(container.querySelector('time')).toHaveAttribute(
+      'datetime',
+      '2026-08-20T10:00:00.000Z',
+    );
+  });
+
+  it('navigates client-side instead of reloading the app', async () => {
+    const getManifest = jest.fn().mockRejectedValue(new Error('unresolved'));
+    const api = apiStub({
+      getManifest,
+      listBundles: jest.fn().mockResolvedValue([bundle()]),
+    });
+    await renderAt(api, '/');
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'Payments API' }),
+    );
+    // A plain <a href> would have tried a full page load, which jsdom cannot
+    // perform; reaching the bundle route in-process is the router at work.
+    // The test mounts the page at `/`, so the splat also carries the
+    // `colophon/` prefix of the link; only the router could have produced it.
+    await waitFor(() =>
+      expect(getManifest).toHaveBeenCalledWith(
+        expect.stringContaining('github.com/brnby/api'),
+        undefined,
+      ),
+    );
+  });
+
+  it('keeps the empty-state title and instructions in separate blocks', async () => {
+    await renderAt(apiStub(), '/');
+    const title = await screen.findByText('Nothing published yet');
+    const code = screen.getByText('colophon publish');
+    expect(code.tagName).toBe('CODE');
+    // Inline siblings are what ran the two together before.
+    expect(title.parentElement).not.toBe(code.parentElement);
+    expect(
+      screen.getByRole('link', { name: 'Read the publishing guide' }),
+    ).toHaveAttribute('href', expect.stringContaining('getting-started'));
+  });
+
+  it('announces an empty filter result and offers to clear it', async () => {
+    const api = apiStub({
+      listBundles: jest.fn().mockResolvedValue([bundle()]),
+    });
+    await renderAt(api, '/');
+    const field = await screen.findByLabelText('Filter documentation');
+    await userEvent.type(field, 'zzz');
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('No documentation matches “zzz”.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    expect(screen.getByText('Payments API')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('offers a retry when the list fails to load', async () => {
+    const listBundles = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValue([bundle()]);
+    await renderAt(apiStub({ listBundles }), '/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Payments API')).toBeInTheDocument();
   });
 });

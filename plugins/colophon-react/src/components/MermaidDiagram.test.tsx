@@ -8,6 +8,7 @@ import { MermaidDiagram } from './MermaidDiagram';
 
 const mockInitialize = jest.fn();
 const mockRender = jest.fn();
+const mockParse = jest.fn();
 const mockLoads = { count: 0 };
 
 jest.mock('mermaid', () => {
@@ -16,7 +17,11 @@ jest.mock('mermaid', () => {
   mockLoads.count += 1;
   return {
     __esModule: true,
-    default: { initialize: mockInitialize, render: mockRender },
+    default: {
+      initialize: mockInitialize,
+      render: mockRender,
+      parse: mockParse,
+    },
   };
 });
 
@@ -75,6 +80,8 @@ describe('MermaidDiagram', () => {
   beforeEach(() => {
     mockInitialize.mockClear();
     mockRender.mockReset();
+    mockParse.mockReset();
+    mockParse.mockResolvedValue(true);
     mockRender.mockResolvedValue({ svg: '<svg data-testid="svg"></svg>' });
   });
 
@@ -115,9 +122,67 @@ describe('MermaidDiagram', () => {
     const fallback = await screen.findByTestId('mermaid-fallback');
     expect(fallback.querySelector('pre')).toHaveTextContent('graph TD;');
     expect(
-      screen.getByText(/Could not render diagram: Parse error on line 2/),
+      screen.getByText(/This diagram could not be rendered/),
     ).toBeInTheDocument();
+    // The parser's own message is a multi-line dump about a grammar the author
+    // may never have seen; it must not reach the page.
+    expect(screen.queryByText(/Parse error/)).toBeNull();
     expect(screen.queryByTestId('mermaid-diagram')).toBeNull();
+  });
+
+  it('parses before rendering and never renders an invalid diagram', async () => {
+    mockParse.mockRejectedValue(new Error('Parse error on line 2'));
+    const { api } = fakeThemeApi('light');
+
+    await renderInTestApp(
+      withTheme(api, <MermaidDiagram language="mermaid" value={DIAGRAM} />),
+    );
+
+    await screen.findByTestId('mermaid-fallback');
+    expect(mockParse).toHaveBeenCalledWith(DIAGRAM);
+    expect(mockRender).not.toHaveBeenCalled();
+  });
+
+  it("turns mermaid's own error rendering off", async () => {
+    const { api } = fakeThemeApi('light');
+    await renderInTestApp(
+      withTheme(api, <MermaidDiagram language="mermaid" value={DIAGRAM} />),
+    );
+    await screen.findByTestId('mermaid-diagram');
+    expect(mockInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({ suppressErrorRendering: true }),
+    );
+  });
+
+  it('removes the scratch elements mermaid leaks when a render fails', async () => {
+    // mermaid appends `#d<id>` to <body> and only removes it on success, so a
+    // failed render leaves its error graphic over the page.
+    mockRender.mockImplementation(async (id: string) => {
+      const leaked = document.createElement('div');
+      leaked.id = `d${id}`;
+      document.body.appendChild(leaked);
+      throw new Error('boom');
+    });
+    const { api } = fakeThemeApi('light');
+
+    await renderInTestApp(
+      withTheme(api, <MermaidDiagram language="mermaid" value={DIAGRAM} />),
+    );
+
+    await screen.findByTestId('mermaid-fallback');
+    expect(
+      document.querySelector('body > [id^="dcolophon-mermaid"]'),
+    ).toBeNull();
+  });
+
+  it('gives the rendered diagram an accessible name', async () => {
+    const { api } = fakeThemeApi('light');
+    await renderInTestApp(
+      withTheme(api, <MermaidDiagram language="mermaid" value={DIAGRAM} />),
+    );
+    expect(
+      await screen.findByRole('img', { name: 'Diagram (graph)' }),
+    ).toBeInTheDocument();
   });
 
   it('initialises mermaid with the theme matching the app', async () => {
