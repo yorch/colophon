@@ -1629,6 +1629,16 @@ pre:focus-visible {
     margin-top: 1.75rem;
   }
 
+  /* A closed <details> hides its body through the UA's content-visibility on
+     ::details-content, not through the children, so display:block on them does
+     nothing. Lifting that here prints the collapsed contributor section without
+     opening it on screen. Only browsers that expose ::details-content get this;
+     elsewhere the section prints collapsed, as it did before, so nothing breaks
+     without it. Printing it needs no script, which is why there is none here. */
+  details.fold::details-content {
+    content-visibility: visible;
+  }
+
   .doc > *,
   .section > * {
     max-width: none;
