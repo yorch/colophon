@@ -39,8 +39,10 @@ const HEADING_VARIANTS = {
   2: 'title-medium',
   3: 'title-small',
   4: 'title-x-small',
+  // Never below body size (16px): body-medium here made h6 14px, smaller than
+  // the paragraph under it. h5 and h6 are told apart by colour instead.
   5: 'body-large',
-  6: 'body-medium',
+  6: 'body-large',
 } as const;
 
 function DefaultCode({ value }: CodeProps) {
@@ -161,6 +163,7 @@ function DefaultHeading({ depth, id, children }: HeadingProps) {
       id={id}
       variant={HEADING_VARIANTS[depth]}
       weight="bold"
+      color={depth === 6 ? 'secondary' : undefined}
     >
       {children}
     </Text>

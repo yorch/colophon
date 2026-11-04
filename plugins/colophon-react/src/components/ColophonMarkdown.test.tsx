@@ -446,3 +446,55 @@ describe('ColophonMarkdown', () => {
     });
   });
 });
+
+describe('ColophonMarkdown body h1 handling', () => {
+  it('drops only the first h1 when it repeats the page title', async () => {
+    await renderInTestApp(
+      <ColophonMarkdown
+        pageTitle="Payments API"
+        content={'# Payments API\n\ntext\n\n# Payments API\n\nmore\n'}
+      />,
+    );
+    // The first becomes an empty anchor; the second is a real, demoted heading.
+    expect(
+      screen.getAllByRole('heading', { name: 'Payments API' }),
+    ).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Payments API' }).tagName).toBe(
+      'H2',
+    );
+  });
+
+  it('demotes a non-title h1 to h2 and keeps it', async () => {
+    await renderInTestApp(
+      <ColophonMarkdown
+        pageTitle="Payments API"
+        content={'# Payments API\n\n# Appendix\n'}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Appendix' }).tagName).toBe(
+      'H2',
+    );
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+
+  it('keeps an h1 that comes first but is not the title', async () => {
+    await renderInTestApp(
+      <ColophonMarkdown pageTitle="Payments API" content={'# Overview\n'} />,
+    );
+    expect(screen.getByRole('heading', { name: 'Overview' }).tagName).toBe(
+      'H2',
+    );
+  });
+
+  it('renders h5 and h6 at body size, never below it', async () => {
+    await renderInTestApp(
+      <ColophonMarkdown content={'##### Five\n\n###### Six\n'} />,
+    );
+    for (const name of ['Five', 'Six']) {
+      expect(screen.getByRole('heading', { name })).toHaveAttribute(
+        'data-variant',
+        'body-large',
+      );
+    }
+  });
+});

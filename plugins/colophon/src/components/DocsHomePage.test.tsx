@@ -187,9 +187,48 @@ describe('DocsHomePage bundle route', () => {
       }),
     });
     await renderAt(api, '/github.com/brnby/api');
-    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    // Not "Breadcrumb(s)": the host's own header landmark already uses that,
+    // and two landmarks of one name cannot be told apart.
+    const nav = screen.getByRole('navigation', { name: 'Documentation path' });
     // Before the manifest arrives the id stands in, so the trail is never empty.
     await waitFor(() => expect(nav).toHaveTextContent('Docs›Payments API'));
+  });
+
+  it('keeps the skip link ahead of the breadcrumb in tab order', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue({
+        bundleId: 'github.com/brnby/api',
+        channel: 'latest',
+        revisionId: 'r',
+        isDefault: true,
+        updatedAt: '2026-08-20T10:00:00.000Z',
+        manifest: {
+          title: 'Payments API',
+          pages: [
+            {
+              path: 'index.md',
+              slug: '',
+              title: 'Payments API',
+              contentHash: 'a'.repeat(64),
+              size: 1,
+              status: 'current',
+              tags: [],
+              headings: [],
+            },
+          ],
+          nav: [],
+          assets: [],
+        },
+      }),
+    });
+    await renderAt(api, '/github.com/brnby/api');
+    const skip = await screen.findByRole('link', { name: 'Skip to content' });
+    const crumb = screen.getByRole('navigation', {
+      name: 'Documentation path',
+    });
+    expect(
+      skip.compareDocumentPosition(crumb) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

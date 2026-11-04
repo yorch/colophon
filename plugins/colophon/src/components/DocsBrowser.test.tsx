@@ -4,11 +4,15 @@ import { scmIntegrationsApiRef } from '@backstage/integration-react';
 import { renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import '@testing-library/jest-dom';
 import type { Manifest, Page } from '@brnby/colophon-common';
+import {
+  COLOPHON_STYLE_ELEMENT_ID,
+  ensureColophonStyles,
+} from '@brnby/plugin-colophon-react';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ColophonApi, ResolvedManifest } from '../api';
 import { colophonApiRef } from '../api';
-import { DocsBrowser } from './DocsBrowser';
+import { DocsBrowser, navBreakpointPx } from './DocsBrowser';
 
 /**
  * A real registry rather than a stub, so the header renders the URL the
@@ -505,7 +509,74 @@ describe('DocsBrowser chrome', () => {
   });
 });
 
+describe('DocsBrowser breakpoint', () => {
+  it('closes Pages at the same width the stylesheet stops hiding its summary', () => {
+    // A 56 in script against CSS's 48 left a band where the summary was
+    // hidden and the <details> already shut: no way to open the nav.
+    ensureColophonStyles();
+    const css = document.getElementById(COLOPHON_STYLE_ELEMENT_ID)?.textContent;
+    const rem = navBreakpointPx() / 16;
+    expect(css).toContain(`@container (min-width: ${rem}rem)`);
+    expect(css).toMatch(
+      new RegExp(
+        `@container \\(min-width: ${rem}rem\\) \\{\\s*\\.colophon-nav-disclosure > summary \\{ display: none`,
+      ),
+    );
+  });
+});
+
 describe('DocsBrowser table of contents', () => {
+  it('puts the disclosure in the content column, after the Pages menu', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            pages: [
+              page({
+                headings: [{ depth: 2, text: 'Setup', anchor: 'setup' }],
+              }),
+            ],
+          }),
+        }),
+      ),
+    });
+    const { container } = await renderWith(api);
+    await screen.findByRole('heading', { name: 'Payments API' });
+    const pages = container.querySelector('.colophon-nav-disclosure');
+    const disclosure = container.querySelector('.colophon-toc-disclosure');
+    expect(pages).not.toBeNull();
+    expect(
+      (pages as Element).compareDocumentPosition(disclosure as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(disclosure?.closest('.colophon-layout-main')).not.toBeNull();
+  });
+
+  it('lists a demoted body h1 in the table of contents', async () => {
+    const api = apiStub({
+      getManifest: jest.fn().mockResolvedValue(
+        resolved({
+          manifest: manifest({
+            pages: [
+              page({
+                headings: [
+                  { depth: 1, text: 'Payments API', anchor: 'payments-api' },
+                  { depth: 1, text: 'Appendix', anchor: 'appendix' },
+                ],
+              }),
+            ],
+          }),
+        }),
+      ),
+    });
+    await renderWith(api);
+    await screen.findByRole('heading', { name: 'Payments API' });
+    expect(
+      (await screen.findAllByRole('link', { name: 'Appendix' })).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Payments API' })).toBeNull();
+  });
+
   it('renders the disclosure and sidebar TOC only for pages with headings', async () => {
     const withHeadings = apiStub({
       getManifest: jest.fn().mockResolvedValue(

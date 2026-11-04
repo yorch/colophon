@@ -16,9 +16,14 @@ type ColophonResult = SearchDocument & {
  * Tags a search engine may leave in a field that are NOT its highlight tags.
  *
  * Seen in the wild as `<284a1ec5-…>word</284a1ec5-…>`: a per-request random
- * token used as the highlight marker, of which only some occurrences were
- * matched up. Anything shaped like a UUID-led tag is engine plumbing, never
- * documentation text, so it is dropped rather than printed.
+ * token, of which only some occurrences were matched up. Anything shaped like
+ * a UUID-led tag is engine plumbing, never documentation text, so it is
+ * dropped rather than printed.
+ *
+ * Applied only AFTER the text has been split on the engine's real tags. Lunr's
+ * highlight tags are themselves `<${randomUUID()}>` and `</…>`, so stripping
+ * first — as this once did — deleted every genuine highlight along with the
+ * strays.
  */
 const STRAY_TAG = /<\/?[0-9a-f]{8}-[^<>\s]*>/gi;
 
@@ -26,28 +31,30 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const tidy = (text: string) => text.replace(STRAY_TAG, '').replace(/\s+/g, ' ');
+
 /**
  * Turns an engine-highlighted string into React nodes.
  *
  * Deliberately not `dangerouslySetInnerHTML` and not a general HTML parser:
  * the only markup honoured is the one pair of tags the engine said it used,
  * and everything else is text. An unmatched opening tag highlights nothing
- * rather than swallowing the rest of the snippet.
+ * rather than swallowing the rest of the snippet. Other angle brackets are
+ * ordinary text (`a < b`, `Array<string>`) and survive.
  */
 export function renderHighlighted(
   text: string,
   preTag?: string,
   postTag?: string,
 ): ReactNode {
-  const flat = text.replace(STRAY_TAG, '').replace(/\s+/g, ' ').trim();
   if (!preTag || !postTag || preTag === postTag) {
-    return flat;
+    return tidy(text).trim();
   }
 
   const splitter = new RegExp(
     `(${escapeRegExp(preTag)}|${escapeRegExp(postTag)})`,
   );
-  const parts = flat.split(splitter);
+  const parts = text.split(splitter);
   const nodes: ReactNode[] = [];
   let open: string | undefined;
   let key = 0;
@@ -69,13 +76,24 @@ export function renderHighlighted(
       }
       // A closer with no opener is dropped.
     } else if (open !== undefined) {
-      open += part;
+      open += tidy(part);
     } else if (part) {
-      nodes.push(part);
+      nodes.push(tidy(part));
     }
   }
   if (open) {
     nodes.push(open);
+  }
+
+  // Trim the snippet's outer edges only: trimming each piece would eat the
+  // space between a word and the highlight beside it.
+  const first = nodes[0];
+  if (typeof first === 'string') {
+    nodes[0] = first.trimStart();
+  }
+  const last = nodes[nodes.length - 1];
+  if (typeof last === 'string') {
+    nodes[nodes.length - 1] = last.trimEnd();
   }
   return nodes;
 }

@@ -102,7 +102,7 @@ function ResolvedLink({ href, title, children }: LinkProps) {
     // Left as a plain fragment so the browser scrolls natively. Routing it
     // would resolve the anchor against the current path instead.
     return (
-      <a className="colophon-toc-link" href={resolved.href} title={title}>
+      <a className="colophon-link" href={resolved.href} title={title}>
         {children}
       </a>
     );

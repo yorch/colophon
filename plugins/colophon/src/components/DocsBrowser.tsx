@@ -1,16 +1,19 @@
 import { useApi } from '@backstage/core-plugin-api';
 import { scmIntegrationsApiRef } from '@backstage/integration-react';
-import { ButtonLink, Flex, Link } from '@backstage/ui';
+import { ButtonLink, Link } from '@backstage/ui';
 import { entrySlug, scopeNavigation } from '@brnby/colophon-common';
 import {
   ColophonNav,
   ColophonPageHeader,
   ColophonSkeleton,
   ColophonToc,
+  NAV_BREAKPOINT_REM,
+  tocEntries,
   useAnchorScroll,
   useColophonStyles,
   useContainerWidth,
 } from '@brnby/plugin-colophon-react';
+import type { ReactNode } from 'react';
 import {
   useCallback,
   useEffect,
@@ -29,8 +32,22 @@ import { ChannelPicker } from './ChannelPicker';
 import { PageMarkdown } from './markdownComponents';
 import { StateMessage } from './StateMessage';
 
-/** Matches the 56rem container query that gives the navigation its column. */
-const NAV_BREAKPOINT = 56 * 16;
+/**
+ * The container width, in px, at which the navigation gets its own column.
+ *
+ * Derived from the same rem number the stylesheet's `@container` condition is
+ * built from, and converted with the root font size because a container query
+ * in rem resolves against that, not against 16. A second hand-written number
+ * here (56rem, against CSS's 48rem) left a band where script had closed the
+ * Pages disclosure while CSS had already hidden its summary.
+ */
+export function navBreakpointPx(): number {
+  const root =
+    typeof document === 'undefined'
+      ? Number.NaN
+      : Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return NAV_BREAKPOINT_REM * (root > 0 ? root : 16);
+}
 
 export interface DocsBrowserProps {
   bundleId: string;
@@ -53,6 +70,12 @@ export interface DocsBrowserProps {
    * should not require a route binding it cannot rely on.
    */
   docsHref?: string;
+  /**
+   * Rendered inside the reader, directly after its skip link. For a host's own
+   * breadcrumb: placed before the browser it would come first in tab order and
+   * the skip link could not skip it.
+   */
+  leading?: ReactNode;
 }
 
 /**
@@ -68,6 +91,7 @@ export function DocsBrowser({
   onChannelChange,
   onBundleTitle,
   docsHref,
+  leading,
 }: DocsBrowserProps) {
   const api = useApi(colophonApiRef);
   const { pathname } = useLocation();
@@ -193,7 +217,7 @@ export function DocsBrowser({
   // other page. Above it, it is always open and its control is hidden.
   const { ref: containerRef, width: containerWidth } = useContainerWidth();
   const roomForNav =
-    containerWidth === undefined || containerWidth >= NAV_BREAKPOINT;
+    containerWidth === undefined || containerWidth >= navBreakpointPx();
   const [navOpen, setNavOpen] = useState(true);
 
   // The tab title is the only place a reader sees which document a background
@@ -251,13 +275,21 @@ export function DocsBrowser({
     return `${pathname}${search ? `?${search}` : ''}`;
   };
 
+  // The host's breadcrumb must survive loading and failure, not only success.
+  const withLeading = (state: ReactNode) => (
+    <>
+      {leading}
+      {state}
+    </>
+  );
+
   if (error) {
     if (httpStatus(error) === 404) {
       // Two different dead ends that the server reports identically. The
       // channel is the likelier culprit when one was asked for: a link to
       // `?channel=pr-42` outlives the pull request it pointed at.
       if (channel) {
-        return (
+        return withLeading(
           <StateMessage
             variant="notFound"
             title="That version doesn't exist"
@@ -271,10 +303,10 @@ export function DocsBrowser({
                 View the default version
               </ButtonLink>
             }
-          />
+          />,
         );
       }
-      return (
+      return withLeading(
         <StateMessage
           variant="notFound"
           title="Documentation not found"
@@ -284,22 +316,24 @@ export function DocsBrowser({
               <Link href={docsHref}>Browse all documentation</Link>
             ) : undefined
           }
-        />
+        />,
       );
     }
-    return (
+    return withLeading(
       <StateMessage
         title="Could not load documentation"
         error={error}
         onRetry={() => setAttempt(count => count + 1)}
-      />
+      />,
     );
   }
   if (!resolved) {
-    return <ColophonSkeleton variant="layout" label="Loading documentation" />;
+    return withLeading(
+      <ColophonSkeleton variant="layout" label="Loading documentation" />,
+    );
   }
   if (pages.length === 0) {
-    return (
+    return withLeading(
       <StateMessage
         title="No documentation published yet"
         detail={
@@ -307,34 +341,33 @@ export function DocsBrowser({
             ? `Nothing has been published under "${subpath}" in ${bundleId}.`
             : `${bundleId} has no pages in this channel.`
         }
-      />
+      />,
     );
   }
 
   // Not in the navigation: that is a collapsed disclosure on narrow layouts,
   // which hid the version (and any way to change it) behind "Pages".
   const channelPicker = onChannelChange && (
-    <Flex justify="end">
+    <div className="colophon-layout-toolbar-picker">
       <ChannelPicker
         bundleId={bundleId}
         current={resolved.channel}
         onChange={onChannelChange}
       />
-    </Flex>
+    </div>
   );
 
-  // Mirrors ColophonToc's own filter (title depth excluded, maxDepth 3), so no
-  // empty column wrapper is rendered for a page the TOC would render nothing for.
-  const hasToc = page?.headings.some(h => h.depth > 1 && h.depth <= 3) ?? false;
+  // Asks ColophonToc's own question, so no empty column wrapper is rendered
+  // for a page the TOC would render nothing for.
+  const hasToc =
+    page !== undefined && tocEntries(page.headings, 3, page.title).length > 0;
 
   const navigation = (
-    <>
-      <ColophonNav
-        nodes={nav}
-        activeSlug={activeSlug}
-        hrefForSlug={hrefForSlug}
-      />
-    </>
+    <ColophonNav
+      nodes={nav}
+      activeSlug={activeSlug}
+      hrefForSlug={hrefForSlug}
+    />
   );
 
   return (
@@ -356,11 +389,7 @@ export function DocsBrowser({
       >
         Skip to content
       </a>
-      {/* Shown by the stylesheet only while the sidebar column is not, so the
-          links are never present twice. */}
-      {hasToc && page && (
-        <ColophonToc variant="disclosure" headings={page.headings} />
-      )}
+      {leading}
       <div className="colophon-layout">
         <div className="colophon-layout-nav">
           <details
@@ -382,7 +411,19 @@ export function DocsBrowser({
           // control, so it should not draw a focus ring of its own.
           style={{ outline: 'none' }}
         >
-          {channelPicker}
+          {/* The "On this page" disclosure sits in the content column, after
+              Pages in reading order, and is shown by the stylesheet only while
+              the sidebar column is not, so the links are never present twice. */}
+          <div className="colophon-layout-toolbar">
+            {hasToc && page && (
+              <ColophonToc
+                variant="disclosure"
+                headings={page.headings}
+                pageTitle={page.title}
+              />
+            )}
+            {channelPicker}
+          </div>
           {!page && slug !== undefined && (
             <StateMessage
               variant="notFound"
@@ -441,7 +482,7 @@ export function DocsBrowser({
 
         {hasToc && page && (
           <div className="colophon-layout-toc">
-            <ColophonToc headings={page.headings} />
+            <ColophonToc headings={page.headings} pageTitle={page.title} />
           </div>
         )}
       </div>

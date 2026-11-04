@@ -92,6 +92,15 @@ describe('relative links', () => {
     );
   });
 
+  it('styles an in-page anchor as a body link, not a table-of-contents row', async () => {
+    // colophon-toc-link is display:flex with a minimum height, which broke
+    // every in-page link in prose onto a line of its own.
+    await render('See [Jump](#rotating-credentials) here.\n');
+    const link = (await screen.findByText('Jump')).closest('a');
+    expect(link).toHaveClass('colophon-link');
+    expect(link).not.toHaveClass('colophon-toc-link');
+  });
+
   it('opens an external link away from the portal, guarded', async () => {
     await render('[Docs](https://example.com)\n');
     const anchor = await screen.findByText('Docs');

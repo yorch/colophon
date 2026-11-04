@@ -258,21 +258,30 @@ function BundleRoute() {
 
   return (
     <Box>
-      <nav aria-label="Breadcrumb">
-        <Flex align="center" gap="2" style={{ flexWrap: 'wrap' }}>
-          <Link href={docsPath || '/'}>Docs</Link>
-          <span aria-hidden>›</span>
-          <Text as="span" aria-current="page">
-            {bundleTitle ?? bundleId}
-          </Text>
-        </Flex>
-      </nav>
-      <Box style={{ marginTop: '1rem' }}>
+      <Box>
         <DocsBrowser
           bundleId={bundleId}
           channel={channel}
           onBundleTitle={setBundleTitle}
           docsHref={docsPath || undefined}
+          // Handed to the browser rather than rendered above it so the skip
+          // link stays the first focusable element in the reader. The label
+          // differs from the host header's own "Breadcrumbs" landmark, which
+          // already offers a "Docs" link.
+          leading={
+            <nav
+              aria-label="Documentation path"
+              style={{ marginBottom: '1rem' }}
+            >
+              <Flex align="center" gap="2" style={{ flexWrap: 'wrap' }}>
+                <Link href={docsPath || '/'}>Docs</Link>
+                <span aria-hidden>›</span>
+                <Text as="span" aria-current="page">
+                  {bundleTitle ?? bundleId}
+                </Text>
+              </Flex>
+            </nav>
+          }
           onChannelChange={next =>
             // Replace, not push, to match the entity tab. Picking a version
             // is a view setting rather than a place the reader went, and a

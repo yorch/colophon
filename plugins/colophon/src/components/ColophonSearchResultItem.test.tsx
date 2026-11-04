@@ -51,6 +51,65 @@ describe('renderHighlighted', () => {
   });
 });
 
+/**
+ * Lunr's highlight tags are `<${randomUUID()}>` and `</${randomUUID()}>`
+ * (LunrSearchEngine.cjs.js). The stray-tag filter is also UUID-shaped, so it
+ * once stripped the real tags before they could be split on.
+ */
+describe('renderHighlighted with the engine UUID tags', () => {
+  const id = '284a1ec5-0c6e-4f7a-9d1b-3c2e5a6b7c8d';
+  const pre = `<${id}>`;
+  const post = `</${id}>`;
+  const html = (nodes: ReturnType<typeof renderHighlighted>) =>
+    render(<div data-testid="out">{nodes}</div>).getByTestId('out').innerHTML;
+
+  it('highlights a normal match', () => {
+    expect(html(renderHighlighted(`a ${pre}store${post} z`, pre, post))).toBe(
+      'a <mark>store</mark> z',
+    );
+  });
+
+  it('highlights in a title field', () => {
+    expect(html(renderHighlighted(`${pre}Chunking${post}`, pre, post))).toBe(
+      '<mark>Chunking</mark>',
+    );
+  });
+
+  it('keeps several matches and the spaces beside them', () => {
+    expect(
+      html(renderHighlighted(`${pre}a${post} and ${pre}b${post}`, pre, post)),
+    ).toBe('<mark>a</mark> and <mark>b</mark>');
+  });
+
+  it('shows an unbalanced opener as plain text without a mark', () => {
+    const out = html(renderHighlighted(`one ${pre}two three`, pre, post));
+    expect(out).toBe('one two three');
+  });
+
+  it('still drops a different UUID-led tag inside and outside a match', () => {
+    const other = '11111111-2222-4333-8444-555555555555';
+    const out = html(
+      renderHighlighted(
+        `x <${other}>y ${pre}s<${other}>t${post} z</${other}>`,
+        pre,
+        post,
+      ),
+    );
+    expect(out).toBe('x y <mark>st</mark> z');
+  });
+
+  it('leaves legitimate angle brackets in the text', () => {
+    const out = html(
+      renderHighlighted(
+        `if a < b then ${pre}Array<string>${post} wins`,
+        pre,
+        post,
+      ),
+    );
+    expect(out).toBe('if a &lt; b then <mark>Array&lt;string&gt;</mark> wins');
+  });
+});
+
 describe('ColophonSearchResultItem', () => {
   it('leads the trail with the repository and clamps the snippet', async () => {
     // Declared apart from the JSX: the collator's extra fields are not on

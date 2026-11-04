@@ -23,9 +23,10 @@ export interface ColophonMarkdownProps {
    *
    * A page body usually opens with `# Title`, and the header above it is the
    * page's `h1` — two of them is a heading-structure error and shows the title
-   * twice. A leading body `h1` whose text equals this is dropped (its id is
-   * kept as an empty anchor so links to it still resolve); any other body
-   * `h1` is demoted to `h2`. Without this prop every body `h1` is demoted but
+   * twice. The FIRST body `h1`, if its text equals this, is dropped (its id is
+   * kept as an empty anchor so links to it still resolve); every other body
+   * `h1` — including a later one that happens to repeat the title — is
+   * demoted to `h2` and kept. Without this prop every body `h1` is demoted but
    * none can be recognised as a duplicate.
    */
   pageTitle?: string;
@@ -117,17 +118,18 @@ export function ColophonMarkdown({
       codeLanguages,
     } = overrides;
 
-    const wanted = normalise(pageTitle);
     const renderHeading = (depth: 1 | 2 | 3 | 4 | 5 | 6) =>
       function ColophonHeading({
         id,
+        node,
         children,
       }: {
         id?: string;
+        node?: { properties?: Record<string, unknown> };
         children?: ReactNode;
       }) {
         if (depth === 1) {
-          if (wanted && normalise(toText(children)) === wanted) {
+          if (node?.properties?.[TITLE_MARK] === 'true') {
             return id ? <span id={id} /> : null;
           }
           return (
@@ -238,7 +240,7 @@ export function ColophonMarkdown({
       h5: renderHeading(5),
       h6: renderHeading(6),
     };
-  }, [overrides, pageTitle]);
+  }, [overrides]);
 
   // A provider's additions come first, then this instance's props, so a
   // page-level plugin composes onto an app-wide one rather than shadowing it.
@@ -271,8 +273,13 @@ export function ColophonMarkdown({
   const rehype = useMemo<ColophonPluginList>(() => {
     const caller = [...(ambient.rehypePlugins ?? []), ...(rehypePlugins ?? [])];
     assertNoReservedPlugins(caller);
-    return [[rehypeSanitize, schema], rehypeSlug, ...caller];
-  }, [schema, ambient.rehypePlugins, rehypePlugins]);
+    return [
+      [rehypeSanitize, schema],
+      rehypeSlug,
+      [rehypeMarkTitleHeading, { title: pageTitle }],
+      ...caller,
+    ];
+  }, [schema, ambient.rehypePlugins, rehypePlugins, pageTitle]);
 
   return (
     <div
@@ -292,6 +299,55 @@ export function ColophonMarkdown({
 }
 
 const REMARK_PLUGINS: ColophonPluginList = [remarkGfm, remarkCallouts];
+
+const TITLE_MARK = 'dataColophonTitle';
+
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+const hastText = (node: HastNode): string =>
+  node.type === 'text'
+    ? (node.value ?? '')
+    : (node.children ?? []).map(hastText).join('');
+
+/**
+ * Marks the first body `h1` when it repeats the page title.
+ *
+ * Done on the tree rather than in the heading component because a component
+ * sees one heading at a time and cannot know whether it is the first. It runs
+ * after sanitising, so the mark cannot be forged by page content (the schema
+ * would have stripped a hand-written one), and before caller plugins.
+ */
+function rehypeMarkTitleHeading({ title }: { title?: string }) {
+  const wanted = normalise(title);
+  return (tree: HastNode) => {
+    if (!wanted) {
+      return;
+    }
+    const first = findFirstH1(tree);
+    if (first && normalise(hastText(first)) === wanted) {
+      first.properties = { ...first.properties, [TITLE_MARK]: 'true' };
+    }
+  };
+}
+
+function findFirstH1(node: HastNode): HastNode | undefined {
+  if (node.type === 'element' && node.tagName === 'h1') {
+    return node;
+  }
+  for (const child of node.children ?? []) {
+    const found = findFirstH1(child);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
+}
 
 function normalise(text: string | undefined): string {
   return (text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();

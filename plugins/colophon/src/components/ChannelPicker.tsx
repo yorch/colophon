@@ -58,9 +58,9 @@ export function ChannelPicker({
   }
 
   return (
-    // A stable hook for the stylesheet: the native select inside has no
-    // visible focus indicator of its own, and BUI's class names are not ours
-    // to select on.
+    // A stable hook for the stylesheet: the Select's trigger is a button whose
+    // own focus indication is a 1px inset line, and BUI's class names are not
+    // ours to select on.
     <div className="colophon-channel-picker">
       <Select
         label="Version"

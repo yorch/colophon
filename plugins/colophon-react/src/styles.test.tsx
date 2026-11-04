@@ -13,6 +13,8 @@ import {
   COLOPHON_STYLE_LAYER,
   colophonMarkdownStyles,
   ensureColophonStyles,
+  NAV_BREAKPOINT_REM,
+  TOC_BREAKPOINT_REM,
 } from './styles';
 
 const styleTag = () => document.getElementById(COLOPHON_STYLE_ELEMENT_ID);
@@ -180,7 +182,6 @@ describe('stylesheet injection', () => {
       '.colophon-bundle-row',
       '.colophon-skeleton',
       '.colophon-skip-link',
-      '.colophon-channel-picker:focus-within',
       "a[aria-current='page']",
     ]) {
       expect(css).toContain(rule);
@@ -236,8 +237,69 @@ describe('stylesheet source', () => {
     // match exactly there. The collapsed side is a negated min-width instead.
     const text = css();
     expect(text).not.toMatch(/@container \(max-width/);
-    expect(text).toContain('@container not (min-width: 48rem)');
-    expect(text).toContain('@container (min-width: 64rem)');
+    expect(text).toContain(
+      `@container not (min-width: ${NAV_BREAKPOINT_REM}rem)`,
+    );
+    expect(text).toContain(`@container (min-width: ${TOC_BREAKPOINT_REM}rem)`);
+  });
+
+  it('builds every container condition from the exported breakpoints', () => {
+    // The docs browser converts NAV_BREAKPOINT_REM to px for the Pages
+    // disclosure. If the sheet carried a literal of its own the two could
+    // drift again (they were 48rem and 56rem).
+    const conditions = [
+      ...css().matchAll(/@container (?:not )?\(min-width: ([\d.]+)rem\)/g),
+    ].map(m => Number(m[1]));
+    expect(conditions.length).toBeGreaterThan(0);
+    for (const rem of conditions) {
+      expect([NAV_BREAKPOINT_REM, TOC_BREAKPOINT_REM]).toContain(rem);
+    }
+  });
+
+  it('draws nav and toc focus rings inside the box, where a scroll container cannot clip them', () => {
+    expect(css()).toMatch(
+      /\.colophon-nav-list a:focus-visible,\s*\.colophon-toc-link:focus-visible \{ outline-offset: -2px; \}/,
+    );
+  });
+
+  it('has no wrapper focus ring stacked on the version picker', () => {
+    expect(css()).not.toContain('.colophon-channel-picker:focus-within');
+    expect(css()).not.toContain('.colophon-channel-picker select');
+    // The Select's own ring is still declared.
+    expect(css()).toContain(
+      ".colophon-channel-picker :is(button, [role='combobox']):focus-visible",
+    );
+  });
+
+  it('marks the active toc and nav row with a logical border, not a physical shadow', () => {
+    const text = css();
+    expect(text).not.toMatch(/inset 2px 0 0/);
+    expect(text).toMatch(
+      /\.colophon-toc-link\[aria-current='location'\] \{[^}]*border-inline-start-color/,
+    );
+    // The active state must not change the box: no padding in that rule.
+    expect(text).not.toMatch(
+      /\.colophon-toc-link\[aria-current='location'\] \{[^}]*padding/,
+    );
+  });
+
+  it("gives IMPORTANT its own colours rather than reusing NOTE's", () => {
+    const rule = (kind: string) =>
+      new RegExp(`\\.colophon-callout-${kind} \\{([^}]*)\\}`).exec(css())?.[1];
+    expect(rule('important')).toBeDefined();
+    expect(rule('important')).not.toContain('announcement');
+  });
+
+  it('colours the code language label with the primary foreground', () => {
+    expect(css()).toMatch(
+      /\.colophon-code-language \{[^}]*color: var\(--bui-fg-primary\)/,
+    );
+  });
+
+  it('shares one summary style between the Pages and On this page disclosures', () => {
+    expect(css()).toContain(
+      '.colophon-toc-disclosure > details > summary::before,\n.colophon-nav-disclosure > summary::before',
+    );
   });
 
   it('keeps @media to device-level concerns only', () => {
